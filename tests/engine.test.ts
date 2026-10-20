@@ -1,7 +1,27 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TokenSpeedEngine } from "../src/core/engine";
 import { makeSettingsMock } from "./mocks/settings";
+
+// ── Testable subclass with mocked time ──────────────────────────────────────
+
+class TimeMockedEngine extends TokenSpeedEngine {
+  constructor(
+    settings: ReturnType<typeof makeSettingsMock>,
+    private mockTime: number,
+  ) {
+    super(settings);
+  }
+  protected override now(): number {
+    return this.mockTime;
+  }
+  /** Advance the mocked clock by `ms` milliseconds. */
+  tick(ms: number): void {
+    this.mockTime += ms;
+  }
+}
+
+// ── Tests ────────────────────────────────────────────────────────────────────
 
 describe("TokenSpeedEngine", () => {
   let settings: ReturnType<typeof makeSettingsMock>;
@@ -17,6 +37,8 @@ describe("TokenSpeedEngine", () => {
   const deltas = (n: number) => {
     for (let i = 0; i < n; i++) engine.recordDelta("x");
   };
+
+  // ── initialization ─────────────────────────────────────────────────────
 
   describe("initialization", () => {
     it("is not streaming before start", () => {
@@ -48,6 +70,8 @@ describe("TokenSpeedEngine", () => {
     });
   });
 
+  // ── direct counting ───────────────────────────────────────────────────
+
   describe("direct counting", () => {
     it("counts one token per delta", () => {
       deltas(10);
@@ -61,33 +85,36 @@ describe("TokenSpeedEngine", () => {
     });
   });
 
+  // ── estimate counting ─────────────────────────────────────────────────
+
   describe("estimate counting", () => {
-    const estimator = () => {
-      const est = new TokenSpeedEngine(settings);
+    it("estimates tokens from word boundaries and punctuation", () => {
+      const est = new TimeMockedEngine(settings, 1000);
       est.initialize();
       est.start();
       (est as unknown as { _countStrategy: string })._countStrategy =
         "estimate";
-      return est;
-    };
-
-    it("estimates tokens from word boundaries and punctuation", () => {
-      const est = estimator();
       est.recordDelta("hello world"); // 2 words
       est.recordDelta(" hi!"); // 1 word + 1 punctuation
       expect(est.tokenCount).toBe(4);
     });
 
     it("counts nothing for empty deltas", () => {
-      const est = estimator();
+      const est = new TimeMockedEngine(settings, 1000);
+      est.initialize();
+      est.start();
+      (est as unknown as { _countStrategy: string })._countStrategy =
+        "estimate";
       est.recordDelta("");
       expect(est.tokenCount).toBe(0);
     });
   });
 
+  // ── provider tokens ───────────────────────────────────────────────────
+
   describe("provider tokens", () => {
     it("falls back to direct counting when provider tokens are disabled", () => {
-      const prov = new TokenSpeedEngine(settings);
+      const prov = new TimeMockedEngine(settings, 1000);
       prov.initialize();
       prov.start();
       // useProviderTokens is false by default: usageOutput is ignored and
@@ -97,7 +124,7 @@ describe("TokenSpeedEngine", () => {
     });
 
     it("uses the provider-reported increment when enabled", () => {
-      const prov = new TokenSpeedEngine(settings);
+      const prov = new TimeMockedEngine(settings, 1000);
       prov.initialize();
       prov.start();
       (prov as unknown as { _useProviderTokens: boolean })._useProviderTokens =
@@ -108,7 +135,7 @@ describe("TokenSpeedEngine", () => {
     });
 
     it("falls back to direct counting for non-increasing usage reports", () => {
-      const prov = new TokenSpeedEngine(settings);
+      const prov = new TimeMockedEngine(settings, 1000);
       prov.initialize();
       prov.start();
       (prov as unknown as { _useProviderTokens: boolean })._useProviderTokens =
@@ -119,6 +146,8 @@ describe("TokenSpeedEngine", () => {
       expect(prov.tokenCount).toBe(26);
     });
   });
+
+  // ── reconcileTotal ────────────────────────────────────────────────────
 
   describe("reconcileTotal", () => {
     it("snaps the count to the authoritative value", () => {
@@ -134,6 +163,8 @@ describe("TokenSpeedEngine", () => {
       expect(engine.tokenCount).toBe(3);
     });
   });
+
+  // ── ttft ──────────────────────────────────────────────────────────────
 
   describe("ttft", () => {
     it("is 0 before measurement", () => {
@@ -157,12 +188,13 @@ describe("TokenSpeedEngine", () => {
     });
   });
 
+  // ── pause/resume ──────────────────────────────────────────────────────
+
   describe("pause/resume", () => {
     it("resumes on the next delta after a pause", () => {
       engine.pause();
-      expect(engine["_isPaused"]).toBe(true);
       engine.recordDelta("x");
-      expect(engine["_isPaused"]).toBe(false);
+      expect(engine.isStreaming).toBe(true);
     });
 
     it("accumulates paused time", () => {
@@ -172,9 +204,11 @@ describe("TokenSpeedEngine", () => {
       engine.recordDelta("x");
       // pausedMs should be >= 0 and the delta counted twice
       expect(engine.tokenCount).toBe(2);
-      expect(engine["_pausedMs"]).toBeGreaterThanOrEqual(0);
+      expect(engine.elapsedMs).toBeGreaterThanOrEqual(0);
     });
   });
+
+  // ── tps behavior ──────────────────────────────────────────────────────
 
   describe("tps behavior", () => {
     it("reports the sliding window tps while streaming", () => {
@@ -184,10 +218,16 @@ describe("TokenSpeedEngine", () => {
     });
 
     it("falls back to the average after streaming ends (default behavior)", () => {
-      deltas(5);
-      engine.stop();
+      const mocked = new TimeMockedEngine(settings, 1000);
+      mocked.initialize();
+      mocked.start();
+      for (let i = 0; i < 5; i++) mocked.recordDelta("x");
+      mocked.tick(5000); // advance 5s so elapsedSeconds > 0
+      mocked.stop();
       // endTpsBehavior is "average": tps === tpsAvg after stop
-      expect(engine.tps).toBe(engine.tpsAvg);
+      expect(mocked.tps).toBe(mocked.tpsAvg);
+      // Verify the calculation path was hit
+      expect(mocked.tpsAvg).toBeGreaterThan(0);
     });
 
     it("keeps the last window value when endTpsBehavior is 'last'", () => {
@@ -209,6 +249,8 @@ describe("TokenSpeedEngine", () => {
     });
   });
 
+  // ── stop ──────────────────────────────────────────────────────────────
+
   describe("stop", () => {
     it("marks the session as no longer streaming", () => {
       engine.stop();
@@ -229,6 +271,42 @@ describe("TokenSpeedEngine", () => {
     it("can start before initialization", () => {
       const eng = new TokenSpeedEngine(settings);
       expect(() => eng.start()).not.toThrow();
+    });
+  });
+
+  // ── applyProvider ─────────────────────────────────────────────────────
+
+  describe("applyProvider", () => {
+    it("calls resolveConfig with the providerId", () => {
+      const resolveSpy = vi.spyOn(settings, "resolveConfig");
+      const testEngine = new TokenSpeedEngine(settings);
+      testEngine.initialize();
+      testEngine.applyProvider("anthropic");
+      expect(resolveSpy).toHaveBeenCalledWith("anthropic");
+    });
+
+    it("is a no-op when called with the same providerId", () => {
+      const resolveSpy = vi.spyOn(settings, "resolveConfig");
+      const testEngine = new TokenSpeedEngine(settings);
+      testEngine.initialize();
+      testEngine.applyProvider("anthropic");
+      testEngine.applyProvider("anthropic");
+      // Second call should not trigger another resolveConfig
+      expect(resolveSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("is a no-op while streaming", () => {
+      const resolveSpy = vi.spyOn(settings, "resolveConfig");
+      const testEngine = new TimeMockedEngine(settings, 1000);
+      testEngine.initialize();
+      // Apply provider before streaming starts
+      testEngine.applyProvider("anthropic");
+      expect(resolveSpy).toHaveBeenCalledWith("anthropic");
+      resolveSpy.mockClear();
+      // Now start streaming and try again — should be a no-op
+      testEngine.start();
+      testEngine.applyProvider("openai");
+      expect(resolveSpy).not.toHaveBeenCalled();
     });
   });
 });

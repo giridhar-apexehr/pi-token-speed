@@ -144,13 +144,20 @@ export class TokenSpeedEngine {
    */
   get elapsedMs(): number {
     if (this._startTime === 0) return 0;
-    if (this.isStreaming) return Date.now() - this._startTime - this._pausedMs;
+    if (this.isStreaming) return this.now() - this._startTime - this._pausedMs;
     return this._endTime - this._startTime - this._pausedMs;
   }
 
   /** Returns elapsed seconds since stream start (0 if not started). */
   get elapsedSeconds(): number {
     return this.elapsedMs / 1000;
+  }
+
+  /**
+   * Returns the current time in milliseconds. Overridable for testing.
+   */
+  protected now(): number {
+    return Date.now();
   }
 
   /**
@@ -189,8 +196,8 @@ export class TokenSpeedEngine {
 
     this._tokenCount = 0;
     this._isStreaming = true;
-    this._startTime = Date.now();
-    this._endTime = Date.now();
+    this._startTime = this.now();
+    this._endTime = this.now();
     this._slidingWindow.reset();
     this._countedUsageOutput = 0;
     this._tps = 0;
@@ -201,7 +208,7 @@ export class TokenSpeedEngine {
    * Records the start timestamp for TTFT measurement.
    */
   startTTFT(): void {
-    this._ttftStart = Date.now();
+    this._ttftStart = this.now();
     this._ttftEnd = 0;
   }
 
@@ -211,7 +218,7 @@ export class TokenSpeedEngine {
    */
   stopTTFT(): void {
     if (this._ttftEnd !== 0) return;
-    this._ttftEnd = Date.now();
+    this._ttftEnd = this.now();
   }
 
   /**
@@ -219,7 +226,7 @@ export class TokenSpeedEngine {
    */
   stop(): void {
     this._isStreaming = false;
-    this._endTime = Date.now();
+    this._endTime = this.now();
     this._slidingWindow.reset();
   }
 
@@ -229,7 +236,7 @@ export class TokenSpeedEngine {
    */
   pause(): void {
     this._isPaused = true;
-    this._startPause = Date.now();
+    this._startPause = this.now();
   }
 
   /**
@@ -237,7 +244,7 @@ export class TokenSpeedEngine {
    */
   private resume(): void {
     this._isPaused = false;
-    this._pausedMs += Date.now() - this._startPause;
+    this._pausedMs += this.now() - this._startPause;
   }
 
   /**
@@ -250,7 +257,7 @@ export class TokenSpeedEngine {
 
     this._tokenCount += tokens;
     this._slidingWindow.record(tokens);
-    this._tps = this._slidingWindow.getTps(Date.now());
+    this._tps = this._slidingWindow.getTps(this.now());
   }
 
   /**
