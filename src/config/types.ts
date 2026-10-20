@@ -101,3 +101,28 @@ export type PartialConfig = Partial<
   formatDuration?: boolean;
   providerOverrides?: ProviderOverrides;
 };
+
+/**
+ * Read/write contract for token-speed settings.
+ *
+ * Consumers depend on this interface (not the concrete `Settings` class)
+ * so tests can inject a mock without `vi.mock`.
+ */
+export interface SettingsProvider {
+  /** Base config (defaults + user settings). */
+  getConfig(): TokenSpeedConfig;
+  /** Base config merged with the provider's override block. */
+  resolveConfig(providerId?: string): TokenSpeedConfig;
+  /** Persist a partial config and update the cache. */
+  setConfig(partial: PartialConfig): Promise<void>;
+  /** Delete keys from the persisted block; re-initialises the cache. */
+  resetKeys(keys: string[]): Promise<void>;
+  /** Replace the whole provider-overrides map. */
+  setProviderOverrides(overrides: ProviderOverrides): Promise<void>;
+  /** Default config derived from registered SettingsItem instances. */
+  getDefaultConfig(): TokenSpeedConfig;
+  /** Initialise the cache by reading from disk. */
+  initialize(): Promise<TokenSpeedConfig>;
+  /** Validation errors from the last initialisation. */
+  getErrors(): string[];
+}

@@ -5,12 +5,12 @@ import type {
   SettingsList,
   TUI,
 } from "@earendil-works/pi-tui";
-import { settings } from "../../config/settings";
 import type {
   Colors,
   DisplayColors,
   ProviderOverride,
   ProviderOverrides,
+  SettingsProvider,
   Thresholds,
 } from "../../config/types";
 import { DISPLAY_COLOR_LABELS } from "../../settings/items/display-colors/color";
@@ -38,6 +38,8 @@ export interface ProviderOverrideMenuOptions {
   onWarning: (message: string) => void;
   /** Optional callback after a committed change (e.g. summary refresh). */
   onBlockChanged?: () => void;
+  /** Settings provider for base config reads. */
+  settings: SettingsProvider;
 }
 
 /**
@@ -56,6 +58,10 @@ export class ProviderOverrideMenu extends AbstractSettingsMenu {
     this.refresher = new SettingsListRefresher(this, this);
   }
 
+  private get settings(): SettingsProvider {
+    return this.opts.settings;
+  }
+
   /**
    * Returns the current override block for this provider.
    */
@@ -65,7 +71,7 @@ export class ProviderOverrideMenu extends AbstractSettingsMenu {
 
   getThresholds(): Thresholds {
     const block = this.block();
-    const base = settings.getConfig();
+    const base = this.settings.getConfig();
     return {
       slow: block.thresholds?.slow ?? base.thresholds.slow,
       medium: block.thresholds?.medium ?? base.thresholds.medium,
@@ -76,7 +82,7 @@ export class ProviderOverrideMenu extends AbstractSettingsMenu {
 
   getColors(): Colors {
     const block = this.block();
-    const base = settings.getConfig();
+    const base = this.settings.getConfig();
     return {
       slow: block.colors?.slow ?? base.colors.slow,
       medium: block.colors?.medium ?? base.colors.medium,
@@ -87,7 +93,7 @@ export class ProviderOverrideMenu extends AbstractSettingsMenu {
 
   getDisplayColors(): DisplayColors {
     const block = this.block();
-    const base = settings.getConfig();
+    const base = this.settings.getConfig();
     return {
       count: block.displayColors?.count ?? base.displayColors.count,
       elapsed: block.displayColors?.elapsed ?? base.displayColors.elapsed,
@@ -138,6 +144,7 @@ export class ProviderOverrideMenu extends AbstractSettingsMenu {
       id,
       value,
       this.opts.onWarning,
+      this.settings,
     );
     if (nextBlock === null) return false;
     return this.persistBlock(nextBlock);
@@ -233,7 +240,10 @@ export class ProviderOverrideMenu extends AbstractSettingsMenu {
     if (!this.settingsList) return;
     for (const item of Object.values(SETTINGS_ITEMS)) {
       if (!isScalarField(item.id)) continue;
-      this.settingsList.updateValue(item.id, fieldValue(item.id, block));
+      this.settingsList.updateValue(
+        item.id,
+        fieldValue(item.id, block, this.settings),
+      );
     }
   }
 
@@ -245,7 +255,7 @@ export class ProviderOverrideMenu extends AbstractSettingsMenu {
     const block = this.block();
     this.settingsList?.updateValue(
       "thresholds",
-      fieldValue("thresholds", block),
+      fieldValue("thresholds", block, this.settings),
     );
 
     this.refresher.refreshThresholds();
@@ -257,8 +267,11 @@ export class ProviderOverrideMenu extends AbstractSettingsMenu {
    */
   override refreshColorItems(): void {
     const block = this.block();
-    const base = settings.getConfig();
-    this.settingsList?.updateValue("colors", fieldValue("colors", block));
+    const base = this.settings.getConfig();
+    this.settingsList?.updateValue(
+      "colors",
+      fieldValue("colors", block, this.settings),
+    );
 
     // Update color submenu items (skip if threshold submenu is open)
     if (!this.thresholdSubmenuItems && this.colorSubmenuItems) {
@@ -283,10 +296,10 @@ export class ProviderOverrideMenu extends AbstractSettingsMenu {
    */
   override refreshDisplayColorItems(): void {
     const block = this.block();
-    const base = settings.getConfig();
+    const base = this.settings.getConfig();
     this.settingsList?.updateValue(
       "displayColors",
-      fieldValue("displayColors", block),
+      fieldValue("displayColors", block, this.settings),
     );
 
     // Update display color submenu items (skip if threshold/colors submenu is open)
@@ -325,7 +338,7 @@ export class ProviderOverrideMenu extends AbstractSettingsMenu {
     theme: Theme,
     tui: TUI,
   ): SettingItem[] {
-    const base = settings.getConfig();
+    const base = this.settings.getConfig();
     const items: SettingItem[] = [];
 
     // Scalar settings (excludes grouped thresholds/colors)
@@ -351,14 +364,18 @@ export class ProviderOverrideMenu extends AbstractSettingsMenu {
         label: thresholdsItem.label,
         description:
           "Customize TPS threshold overrides (slow, medium, fast, blazing)",
-        currentValue: fieldValue("thresholds", block),
+        currentValue: fieldValue("thresholds", block, this.settings),
         submenu: (
           _currentValue: string,
           submenuDone: (value?: string) => void,
         ) =>
           this.openTierSubmenu(
-            new OverrideTierSubmenuBuilder(theme, tui, base, () =>
-              this.block(),
+            new OverrideTierSubmenuBuilder(
+              theme,
+              tui,
+              this.settings,
+              base,
+              () => this.block(),
             ).buildThresholds(),
             submenuDone,
             tui,
@@ -373,14 +390,18 @@ export class ProviderOverrideMenu extends AbstractSettingsMenu {
         label: colorsItem.label,
         description:
           "Customize tier color overrides (slow, medium, fast, blazing)",
-        currentValue: fieldValue("colors", block),
+        currentValue: fieldValue("colors", block, this.settings),
         submenu: (
           _currentValue: string,
           submenuDone: (value?: string) => void,
         ) =>
           this.openTierSubmenu(
-            new OverrideTierSubmenuBuilder(theme, tui, base, () =>
-              this.block(),
+            new OverrideTierSubmenuBuilder(
+              theme,
+              tui,
+              this.settings,
+              base,
+              () => this.block(),
             ).buildColors(),
             submenuDone,
             tui,
@@ -394,14 +415,18 @@ export class ProviderOverrideMenu extends AbstractSettingsMenu {
         id: "displayColors",
         label: displayColorsItem.label,
         description: "Customize suffix color overrides (count, elapsed, ttft)",
-        currentValue: fieldValue("displayColors", block),
+        currentValue: fieldValue("displayColors", block, this.settings),
         submenu: (
           _currentValue: string,
           submenuDone: (value?: string) => void,
         ) =>
           this.openTierSubmenu(
-            new OverrideTierSubmenuBuilder(theme, tui, base, () =>
-              this.block(),
+            new OverrideTierSubmenuBuilder(
+              theme,
+              tui,
+              this.settings,
+              base,
+              () => this.block(),
             ).buildDisplayColors(),
             submenuDone,
             tui,

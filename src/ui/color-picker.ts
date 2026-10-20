@@ -1,9 +1,9 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import type { SettingItem, TUI } from "@earendil-works/pi-tui";
-import { settings } from "../config/settings";
 import type {
   DisplayColorKey,
   ProviderOverride,
+  SettingsProvider,
   TierName,
   TokenSpeedConfig,
 } from "../config/types";
@@ -32,6 +32,7 @@ export class TierSubmenuBuilder {
   constructor(
     private readonly theme: Theme,
     private readonly tui: TUI,
+    private readonly settings: SettingsProvider,
   ) {}
 
   /**
@@ -124,7 +125,7 @@ export class TierSubmenuBuilder {
    * @returns The threshold value.
    */
   protected resolveThreshold(tier: TierName): number {
-    return settings.getConfig().thresholds[tier];
+    return this.settings.getConfig().thresholds[tier];
   }
 
   /**
@@ -134,7 +135,7 @@ export class TierSubmenuBuilder {
    * @returns The hex color string.
    */
   protected resolveColor(tier: TierName): string {
-    return settings.getConfig().colors[tier];
+    return this.settings.getConfig().colors[tier];
   }
 
   /**
@@ -144,7 +145,7 @@ export class TierSubmenuBuilder {
    * @returns The hex color string ("" when unset).
    */
   protected resolveDisplayColor(key: DisplayColorKey): string {
-    return settings.getConfig().displayColors[key];
+    return this.settings.getConfig().displayColors[key];
   }
 
   // ── Threshold formatting hooks ────────────────────────────────────────
@@ -338,10 +339,11 @@ export class OverrideTierSubmenuBuilder extends TierSubmenuBuilder {
   constructor(
     theme: Theme,
     tui: TUI,
+    settings: SettingsProvider,
     private readonly base: TokenSpeedConfig,
     private readonly getBlock: () => ProviderOverride,
   ) {
-    super(theme, tui);
+    super(theme, tui, settings);
   }
 
   /** Reads from the override block, falling back to the base config. */

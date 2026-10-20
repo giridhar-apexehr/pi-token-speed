@@ -1,7 +1,10 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { STATUS_KEY } from "../config/constants";
-import { settings } from "../config/settings";
-import type { DisplayColors, TokenSpeedConfig } from "../config/types";
+import type {
+  DisplayColors,
+  SettingsProvider,
+  TokenSpeedConfig,
+} from "../config/types";
 import { TokenSpeedEngine } from "../core/engine";
 import { type DisplayMode } from "../settings/items/display";
 import { truecolor } from "./ansi";
@@ -23,9 +26,12 @@ export class Renderer {
   private lastUpdateTime = 0;
 
   /**
-   * Creates a new Renderer bound to an engine.
+   * Creates a new Renderer bound to an engine and settings provider.
    */
-  constructor(private readonly engine: TokenSpeedEngine) {}
+  constructor(
+    private readonly engine: TokenSpeedEngine,
+    private readonly settings: SettingsProvider,
+  ) {}
 
   /**
    * Updates the status bar, throttled by the configured updateInterval.
@@ -34,7 +40,7 @@ export class Renderer {
    * @param ctx The context used by Pi.
    */
   update(ctx: ExtensionContext): void {
-    const config = settings.getConfig();
+    const config = this.settings.getConfig();
     const interval = config.updateInterval;
 
     // If no interval set, update immediately (current behavior)
@@ -57,7 +63,7 @@ export class Renderer {
    * @param ctx The context used by Pi.
    */
   private render(ctx: ExtensionContext): void {
-    const config = settings.getEffectiveConfig(ctx.model?.provider);
+    const config = this.settings.resolveConfig(ctx.model?.provider);
     const theme = ctx.ui.theme;
 
     // Render TPS first
@@ -218,7 +224,7 @@ export class Renderer {
    */
   initialize(ctx: ExtensionContext): void {
     const theme = ctx.ui.theme;
-    const config = settings.getEffectiveConfig(ctx.model?.provider);
+    const config = this.settings.resolveConfig(ctx.model?.provider);
     const icon = config.icon ? `${config.icon} ` : "";
     const prefix = theme.fg("dim", `${icon}TPS:`);
     const text = `${prefix} --`;

@@ -7,7 +7,7 @@ import type {
   SettingsList,
   TUI,
 } from "@earendil-works/pi-tui";
-import { settings } from "../config/settings";
+import type { SettingsProvider } from "../config/types";
 import type { TokenSpeedEngine } from "../core/engine";
 import { OverrideSettingsMenu } from "../settings/menu/override-settings-menu";
 import type { Renderer } from "../ui/renderer";
@@ -20,6 +20,7 @@ export class OverridesHandler extends BaseMenuHandler {
   constructor(
     private readonly renderer: Renderer,
     private readonly engine: TokenSpeedEngine,
+    private readonly settings: SettingsProvider,
   ) {
     super();
   }
@@ -35,10 +36,11 @@ export class OverridesHandler extends BaseMenuHandler {
     };
     onClosed: () => void;
   } {
-    const overrides = settings.getConfig().providerOverrides;
+    const overrides = this.settings.getConfig().providerOverrides;
     const menu = new OverrideSettingsMenu({
       overrides: { ...overrides },
-      persist: (next) => settings.setProviderOverrides(next),
+      persist: (next) => this.settings.setProviderOverrides(next),
+      settings: this.settings,
       onSettingChange: () => {
         this.engine.initialize();
         this.engine.applyProvider(ctx.model?.provider);

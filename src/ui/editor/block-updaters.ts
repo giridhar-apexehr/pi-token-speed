@@ -1,7 +1,7 @@
-import { settings } from "../../config/settings";
 import type {
   DisplayColorKey,
   ProviderOverride,
+  SettingsProvider,
   Thresholds,
   TierName,
 } from "../../config/types";
@@ -41,6 +41,8 @@ export interface BlockUpdater {
  * Handles scalar fields that delegate to SettingsItem.
  */
 export class ScalarBlockUpdater implements BlockUpdater {
+  constructor(private readonly settings: SettingsProvider) {}
+
   appliesTo(id: string): boolean {
     return SETTINGS_ITEMS[id] !== undefined && isScalarField(id);
   }
@@ -51,7 +53,7 @@ export class ScalarBlockUpdater implements BlockUpdater {
     value: string,
   ): ProviderOverride | null {
     const next: ProviderOverride = { ...block };
-    const base = settings.getConfig();
+    const base = this.settings.getConfig();
     const item = SETTINGS_ITEMS[id]!;
 
     if (value === BASE) {
@@ -69,6 +71,8 @@ export class ScalarBlockUpdater implements BlockUpdater {
  * Handles threshold fields (e.g. "thresholds.slow").
  */
 export class ThresholdBlockUpdater implements BlockUpdater {
+  constructor(private readonly settings: SettingsProvider) {}
+
   appliesTo(id: string): boolean {
     return id.startsWith("thresholds.");
   }
@@ -80,7 +84,7 @@ export class ThresholdBlockUpdater implements BlockUpdater {
     onWarning?: WarningCallback,
   ): ProviderOverride | null {
     const next: ProviderOverride = { ...block };
-    const base = settings.getConfig();
+    const base = this.settings.getConfig();
     const tier = id.slice("thresholds.".length) as TierName;
     const thresholds: Partial<Thresholds> = { ...(block.thresholds ?? {}) };
 
@@ -183,11 +187,12 @@ export function computeNextBlock(
   block: ProviderOverride,
   id: string,
   value: string,
-  onWarning?: WarningCallback,
+  onWarning: WarningCallback,
+  settings: SettingsProvider,
 ): ProviderOverride | null {
   const updaters: BlockUpdater[] = [
-    new ScalarBlockUpdater(),
-    new ThresholdBlockUpdater(),
+    new ScalarBlockUpdater(settings),
+    new ThresholdBlockUpdater(settings),
     new ColorBlockUpdater(),
     new DisplayColorBlockUpdater(),
   ];

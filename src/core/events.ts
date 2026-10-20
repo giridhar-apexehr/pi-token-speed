@@ -2,7 +2,7 @@ import type {
   AgentEndEvent,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
-import { settings } from "../config/settings";
+import type { SettingsProvider } from "../config/types";
 import { Renderer } from "../ui/renderer";
 import { TokenSpeedEngine } from "./engine";
 import type { MessageUpdatePayload } from "./message-handler";
@@ -23,6 +23,7 @@ export class EventManager {
   constructor(
     private readonly engine: TokenSpeedEngine,
     private readonly renderer: Renderer,
+    private readonly settings: SettingsProvider,
   ) {
     this.registry = new MessageHandlerRegistry();
     this.registry.register(
@@ -39,8 +40,8 @@ export class EventManager {
    * @param ctx The Pi extension context.
    */
   async handleSessionStart(ctx: ExtensionContext): Promise<void> {
-    await settings.initialize();
-    const errors = settings.getErrors();
+    await this.settings.initialize();
+    const errors = this.settings.getErrors();
 
     if (errors.length > 0) {
       const message = ["[pi-token-speed]", ...errors].join("\n");

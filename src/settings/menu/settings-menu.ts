@@ -5,10 +5,10 @@ import type {
   SettingsList,
   TUI,
 } from "@earendil-works/pi-tui";
-import { settings } from "../../config/settings";
 import type {
   Colors,
   DisplayColors,
+  SettingsProvider,
   Thresholds,
   TokenSpeedConfig,
 } from "../../config/types";
@@ -30,6 +30,7 @@ export interface SettingsMenuOptions {
   config: TokenSpeedConfig;
   onSettingChange: () => void; // callback for re-apply engine + renderer
   onWarning?: (message: string) => void;
+  settings: SettingsProvider;
 }
 
 /**
@@ -46,16 +47,20 @@ export class SettingsMenu extends AbstractSettingsMenu {
     this.refresher = new SettingsListRefresher(this, this);
   }
 
+  private get settings(): SettingsProvider {
+    return this.opts.settings;
+  }
+
   getThresholds(): Thresholds {
-    return settings.getConfig().thresholds;
+    return this.settings.getConfig().thresholds;
   }
 
   getColors(): Colors {
-    return settings.getConfig().colors;
+    return this.settings.getConfig().colors;
   }
 
   getDisplayColors(): DisplayColors {
-    return settings.getConfig().displayColors;
+    return this.settings.getConfig().displayColors;
   }
 
   /**
@@ -94,7 +99,7 @@ export class SettingsMenu extends AbstractSettingsMenu {
    * @returns Whether the change was committed.
    */
   protected override async commit(id: string, value: string): Promise<boolean> {
-    const config = settings.getConfig();
+    const config = this.settings.getConfig();
     const item =
       SETTINGS_ITEMS[id] ??
       TIER_SETTINGS_ITEMS[id] ??
@@ -107,7 +112,7 @@ export class SettingsMenu extends AbstractSettingsMenu {
       );
       return false;
     }
-    await settings.setConfig(result.config!);
+    await this.settings.setConfig(result.config!);
     return true;
   }
 
@@ -134,10 +139,10 @@ export class SettingsMenu extends AbstractSettingsMenu {
       TIER_SETTINGS_ITEMS[id] ??
       DISPLAY_COLOR_SETTINGS_ITEMS[id];
     if (!item) return;
-    await settings.resetKeys([id]);
+    await this.settings.resetKeys([id]);
 
     // Reflect the reset value in the main menu's row
-    const mainValue = item.format(settings.getConfig());
+    const mainValue = item.format(this.settings.getConfig());
     if (mainValue !== undefined) {
       this.settingsList?.updateValue(id, mainValue);
     }
@@ -153,7 +158,7 @@ export class SettingsMenu extends AbstractSettingsMenu {
   protected override async resetGroup(id: string): Promise<void> {
     const item = SETTINGS_ITEMS[id];
     if (!item) return;
-    await settings.resetKeys([id]);
+    await this.settings.resetKeys([id]);
   }
 
   /**
@@ -205,6 +210,7 @@ export class SettingsMenu extends AbstractSettingsMenu {
           const submenuItems = new TierSubmenuBuilder(
             theme,
             tui,
+            this.settings,
           ).buildThresholds();
           return this.createSubmenuList(
             submenuItems,
@@ -229,7 +235,11 @@ export class SettingsMenu extends AbstractSettingsMenu {
         description: colorsItem.description,
         currentValue: colorsDisplay,
         submenu: (_currentValue: string, done) => {
-          const submenuItems = new TierSubmenuBuilder(theme, tui).buildColors();
+          const submenuItems = new TierSubmenuBuilder(
+            theme,
+            tui,
+            this.settings,
+          ).buildColors();
           return this.createSubmenuList(
             submenuItems,
             Math.min(submenuItems.length + 2, 15),
@@ -257,6 +267,7 @@ export class SettingsMenu extends AbstractSettingsMenu {
           const submenuItems = new TierSubmenuBuilder(
             theme,
             tui,
+            this.settings,
           ).buildDisplayColors();
           return this.createSubmenuList(
             submenuItems,
@@ -278,7 +289,7 @@ export class SettingsMenu extends AbstractSettingsMenu {
    * and active submenu (if thresholds is open).
    */
   override refreshThresholdItems(): void {
-    const config = settings.getConfig();
+    const config = this.settings.getConfig();
     const allThresholds = TIERS.map(({ key }) => config.thresholds[key]).join(
       " | ",
     );
@@ -296,7 +307,7 @@ export class SettingsMenu extends AbstractSettingsMenu {
    * and active submenu (if colors is open).
    */
   override refreshColorItems(): void {
-    const config = settings.getConfig();
+    const config = this.settings.getConfig();
 
     if (this.settingsList) {
       this.settingsList.updateValue(
@@ -314,7 +325,7 @@ export class SettingsMenu extends AbstractSettingsMenu {
    * and active submenu (if displayColors is open).
    */
   override refreshDisplayColorItems(): void {
-    const config = settings.getConfig();
+    const config = this.settings.getConfig();
     const dc = config.displayColors;
 
     if (this.settingsList) {

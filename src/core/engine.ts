@@ -1,5 +1,4 @@
-import { settings } from "../config/settings";
-import type { TokenSpeedConfig } from "../config/types";
+import type { SettingsProvider, TokenSpeedConfig } from "../config/types";
 import {
   COUNT_STRATEGY_DEFAULT,
   type CountStrategy,
@@ -37,7 +36,7 @@ export class TokenSpeedEngine {
   private _endTpsBehavior: EndTpsBehavior = END_TPS_BEHAVIOR_DEFAULT;
   private _providerId: string | undefined;
 
-  constructor() {
+  constructor(private readonly settings: SettingsProvider) {
     this._slidingWindow = new SlidingWindow(SLIDING_WINDOW_DEFAULT);
   }
 
@@ -47,7 +46,7 @@ export class TokenSpeedEngine {
    */
   initialize(): void {
     this._providerId = undefined;
-    this.applyConfig(settings.getConfig());
+    this.applyConfig(this.settings.getConfig());
   }
 
   /**
@@ -66,7 +65,7 @@ export class TokenSpeedEngine {
   applyProvider(providerId?: string): void {
     if (providerId === this._providerId || this._isStreaming) return;
     this._providerId = providerId;
-    this.applyConfig(settings.getEffectiveConfig(providerId));
+    this.applyConfig(this.settings.resolveConfig(providerId));
   }
 
   /**

@@ -5,8 +5,11 @@ import type {
   SettingsList,
   TUI,
 } from "@earendil-works/pi-tui";
-import { settings } from "../../config/settings";
-import type { ProviderOverride, ProviderOverrides } from "../../config/types";
+import type {
+  ProviderOverride,
+  ProviderOverrides,
+  SettingsProvider,
+} from "../../config/types";
 import { ConfirmDialog } from "../../ui/dialog/confirm-dialog";
 import { InputDialog } from "../../ui/dialog/input-dialog";
 import type { ResettableSettingsList } from "../../ui/resettable-settings-list";
@@ -24,6 +27,7 @@ export interface OverrideSettingsMenuOptions {
   persist: (next: ProviderOverrides) => Promise<void>;
   onSettingChange: () => void;
   onWarning?: (message: string) => void;
+  settings: SettingsProvider;
 }
 
 /**
@@ -105,7 +109,7 @@ export class OverrideSettingsMenu extends AbstractSettingsMenu {
       if (!isScalarField(item.id)) continue;
       if (item.id in block) {
         parts.push(
-          `${item.id}: ${item.formatPartial(block, settings.getConfig()) ?? ""}`,
+          `${item.id}: ${item.formatPartial(block, this.opts.settings.getConfig()) ?? ""}`,
         );
       }
     }
@@ -142,6 +146,7 @@ export class OverrideSettingsMenu extends AbstractSettingsMenu {
       overrides: this.opts.overrides,
       persist: this.opts.persist,
       onWarning: (message) => this.opts.onWarning?.(message),
+      settings: this.opts.settings,
       onBlockChanged: () => {
         this.settingsList?.updateValue(
           providerId,

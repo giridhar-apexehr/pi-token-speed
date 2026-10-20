@@ -7,7 +7,7 @@ import type {
   SettingsList,
   TUI,
 } from "@earendil-works/pi-tui";
-import { settings } from "../config/settings";
+import type { SettingsProvider } from "../config/types";
 import type { TokenSpeedEngine } from "../core/engine";
 import { SettingsMenu } from "../settings/menu/settings-menu";
 import type { Renderer } from "../ui/renderer";
@@ -20,6 +20,7 @@ export class SettingsHandler extends BaseMenuHandler {
   constructor(
     private readonly renderer: Renderer,
     private readonly engine: TokenSpeedEngine,
+    private readonly settings: SettingsProvider,
   ) {
     super();
   }
@@ -36,7 +37,8 @@ export class SettingsHandler extends BaseMenuHandler {
     onClosed: () => void;
   } {
     const menu = new SettingsMenu({
-      config: settings.getConfig(),
+      config: this.settings.getConfig(),
+      settings: this.settings,
       onSettingChange: () => {
         this.engine.initialize();
         this.renderer.update(ctx);

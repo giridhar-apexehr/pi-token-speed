@@ -1,7 +1,7 @@
-import { settings } from "../../config/settings";
 import type {
   DisplayColorKey,
   ProviderOverride,
+  SettingsProvider,
   TierName,
 } from "../../config/types";
 import { SETTINGS_ITEMS } from "../../settings/defaults";
@@ -15,7 +15,11 @@ export const BASE = "(base)";
 /**
  * Computes the currentValue shown for a block field row.
  */
-export function fieldValue(id: string, block: ProviderOverride): string {
+export function fieldValue(
+  id: string,
+  block: ProviderOverride,
+  settings: SettingsProvider,
+): string {
   // Group ids ("thresholds", "colors", "displayColors") are registered in
   // SETTINGS_ITEMS as group entries whose format() is undefined; resolve
   // them (and their children) by prefix before the scalar lookup.

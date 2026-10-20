@@ -6,15 +6,18 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 
 import { CommandManager } from "./commands";
+import { createSettings } from "./config/settings";
 import { TokenSpeedEngine } from "./core/engine";
 import { EventManager } from "./core/events";
 import { Renderer } from "./ui/renderer";
 
 export default async (pi: ExtensionAPI) => {
-  const engine = new TokenSpeedEngine();
-  const renderer = new Renderer(engine);
-  const commands = new CommandManager(renderer, engine);
-  const eventManager = new EventManager(engine, renderer);
+  const settings = createSettings();
+  await settings.initialize();
+  const engine = new TokenSpeedEngine(settings);
+  const renderer = new Renderer(engine, settings);
+  const commands = new CommandManager(renderer, engine, settings);
+  const eventManager = new EventManager(engine, renderer, settings);
 
   // Command registration
   pi.registerCommand("tps", {

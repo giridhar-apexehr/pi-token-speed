@@ -19,6 +19,7 @@ import { SettingsValidator } from "./settings-validator";
 import type {
   PartialConfig,
   ProviderOverrides,
+  SettingsProvider,
   TokenSpeedConfig,
 } from "./types";
 
@@ -29,13 +30,10 @@ import type {
  * Composes a `SettingsStorage` for file I/O and a `SettingsValidator`
  * for config validation and provider override sanitization.
  */
-class Settings {
+class Settings implements SettingsProvider {
   private cachedConfig: TokenSpeedConfig | null = null;
   private cachedErrors: string[] = [];
 
-  /**
-   * @internal Use the exported `settings` singleton instead.
-   */
   constructor(
     private readonly storage: SettingsStorage,
     public readonly validator: SettingsValidator,
@@ -113,7 +111,7 @@ class Settings {
    * @param providerId The pi ProviderId (e.g. "anthropic"), or undefined
    *   when no model is active — returns the base config.
    */
-  getEffectiveConfig(providerId?: string): TokenSpeedConfig {
+  resolveConfig(providerId?: string): TokenSpeedConfig {
     const base = this.getConfig();
     if (!providerId) return base;
 
@@ -184,9 +182,11 @@ class Settings {
 }
 
 /**
- * Shared singleton instance used across the extension.
+ * Shared instance used across the extension (created in `index.ts`).
  */
-export const settings = new Settings(
-  new SettingsStorage(join(getAgentDir(), "settings.json")),
-  new SettingsValidator(),
-);
+export function createSettings(): Settings {
+  return new Settings(
+    new SettingsStorage(join(getAgentDir(), "settings.json")),
+    new SettingsValidator(),
+  );
+}

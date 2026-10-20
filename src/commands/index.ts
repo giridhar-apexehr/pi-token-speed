@@ -1,5 +1,6 @@
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import type { AutocompleteItem } from "@earendil-works/pi-tui";
+import type { SettingsProvider } from "../config/types";
 import type { TokenSpeedEngine } from "../core/engine";
 import type { Renderer } from "../ui/renderer";
 import { OverridesHandler } from "./overrides-handler";
@@ -21,6 +22,7 @@ export class CommandManager {
   constructor(
     private readonly renderer: Renderer,
     private readonly engine: TokenSpeedEngine,
+    private readonly settings: SettingsProvider,
   ) {
     this.handlers = new Map();
     this.registerHandlers();
@@ -30,10 +32,18 @@ export class CommandManager {
    * Registers all command handlers into the dispatch map.
    */
   private registerHandlers(): void {
-    const settingsHandler = new SettingsHandler(this.renderer, this.engine);
+    const settingsHandler = new SettingsHandler(
+      this.renderer,
+      this.engine,
+      this.settings,
+    );
     this.handlers.set("", { handler: settingsHandler, default: true });
 
-    const overridesHandler = new OverridesHandler(this.renderer, this.engine);
+    const overridesHandler = new OverridesHandler(
+      this.renderer,
+      this.engine,
+      this.settings,
+    );
     this.handlers.set("overrides", { handler: overridesHandler });
   }
 
