@@ -91,7 +91,7 @@ export class TokenSpeedEngine {
    * - `direct`: Counts 1 token per delta (text, thinking, toolcall)
    * - `estimate`: Approximates tokens from delta text using word-boundary regex
    *
-   * @param delta The text/thinking delta string.
+   * @param delta The delta string (text, thinking, or tool-call).
    * @param usageOutput Provider-reported cumulative output-token count (optional).
    */
   recordDelta(delta: string, usageOutput?: number): void {
@@ -225,7 +225,7 @@ export class TokenSpeedEngine {
   }
 
   /**
-   * Pauses the timer. Call before a non-edit/write tool call ends.
+   * Pauses the timer. Call before a tool call ends to exclude its execution time.
    * The next `recordDelta` will call `resume()`.
    */
   pause(): void {

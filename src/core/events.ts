@@ -2,7 +2,6 @@ import type {
   AgentEndEvent,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
-import { TOKEN_GENERATION_TOOLS } from "../config/constants";
 import { settings } from "../config/settings";
 import { Renderer } from "../ui/renderer";
 import { TokenSpeedEngine } from "./engine";
@@ -31,12 +30,7 @@ export class EventManager {
     );
     this.registry.register(new DeltaHandler(engine, renderer));
     this.registry.register(new ToolcallDeltaHandler(engine, renderer));
-    this.registry.register(
-      new ToolcallEndHandler(
-        engine,
-        (name) => !TOKEN_GENERATION_TOOLS.has(name),
-      ),
-    );
+    this.registry.register(new ToolcallEndHandler(engine));
   }
 
   /**

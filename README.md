@@ -213,13 +213,13 @@ When `useProviderTokens` is `false` (default) or when the provider doesn't repor
 | `direct` (default) | Counts each delta as 1 token        |
 | `estimate`         | Approximates tokens from delta text |
 
-The `direct` strategy is fast and preserves the original behavior — it counts each streaming delta as 1 token, including toolcalls for `edit` and `write` operations. Use `estimate` when your server streams in small chunks — it approximates the real token count from the delta text, giving a more meaningful TPS reading.
+The `direct` strategy is fast and preserves the original behavior — it counts each streaming delta as 1 token, including toolcall deltas. Use `estimate` when your server streams in small chunks — it approximates the real token count from the delta text, giving a more meaningful TPS reading.
 
-> **Note:** Only `edit` and `write` tool call deltas are counted. Other tool calls (prompt processing) are excluded from token counting.
+> **Note:** All assistant tool-call deltas are counted — the model generates every tool's arguments during decoding, so they all consume output tokens. Tool execution time is excluded via the timer-pause mechanism.
 
 ### Timer Pausing
 
-The extension automatically pauses the TPS timer when a prompt processing tool call ends (any tool other than `edit` or `write`). This prevents tool processing time from skewing the TPS calculation. The timer resumes when the next token delta arrives.
+The extension automatically pauses the TPS timer when a tool call ends, regardless of tool type. This prevents tool execution time from skewing the TPS calculation. The timer resumes when the next token delta arrives.
 
 ### End-of-Stream TPS Behavior
 
@@ -387,7 +387,7 @@ The settings menu is described in detail in [Interactive Menu](#interactive-menu
 1. **Session Start** — Renders the initial status bar entry showing the configured icon followed by `TPS: --`
 2. **Message Start** — When a user message starts, TTFT measurement begins
 3. **First Token & Streaming Start** — The moment the first content block starts (`text_start`, `thinking_start`, or `toolcall_start`), the TTFT is recorded and the streaming engine starts tracking
-4. **Token Update** — Each text/thinking delta is recorded. If `useProviderTokens` is `true` and the provider reports token counts, those are used directly; otherwise the extension's own counter (controlled by `countStrategy`) is used
+4. **Token Update** — Each text, thinking, and tool-call delta is recorded. If `useProviderTokens` is `true` and the provider reports token counts, those are used directly; otherwise the extension's own counter (controlled by `countStrategy`) is used
 5. **Sliding Window** — TPS is calculated using a configurable time window of token timestamps. If all events in the window share the same timestamp (a flush after a stall), the span extends backward to include the gap. When streaming ends, behavior depends on `endTpsBehavior`:
    - `average` (default): returns the overall average TPS for consistency with stats.
    - `last`: returns the last sliding window measurement.

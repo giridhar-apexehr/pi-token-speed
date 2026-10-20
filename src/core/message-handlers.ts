@@ -1,5 +1,4 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { TOKEN_GENERATION_TOOLS } from "../config/constants";
 import type { Renderer } from "../ui/renderer";
 import type { TokenSpeedEngine } from "./engine";
 import type { MessageHandler, MessageUpdatePayload } from "./message-handler";
@@ -49,7 +48,8 @@ export class DeltaHandler implements MessageHandler {
 /**
  * Handles tool call delta events.
  *
- * Only processes deltas for token-generation tools (edits/writes).
+ * Counts every assistant tool-call delta — the model generates all tool
+ * arguments during decoding, so they all consume output tokens.
  */
 export class ToolcallDeltaHandler implements MessageHandler {
   readonly types = ["toolcall_delta"];
@@ -66,28 +66,23 @@ export class ToolcallDeltaHandler implements MessageHandler {
       ];
     if (toolCall?.type !== "toolCall") return;
 
-    if (TOKEN_GENERATION_TOOLS.has(toolCall.name ?? "")) {
-      this.engine.recordDelta(
-        event.assistantMessageEvent.delta ?? "",
-        event.assistantMessageEvent.partial?.usage?.output,
-      );
-      this.renderer.update(ctx);
-    }
+    this.engine.recordDelta(
+      event.assistantMessageEvent.delta ?? "",
+      event.assistantMessageEvent.partial?.usage?.output,
+    );
+    this.renderer.update(ctx);
   }
 }
 
 /**
  * Handles tool call end events.
  *
- * Pauses the engine for prompt-processing tools to avoid skewing averages.
+ * Pauses the engine to exclude tool-execution time from TPS averages.
  */
 export class ToolcallEndHandler implements MessageHandler {
   readonly types = ["toolcall_end"];
 
-  constructor(
-    private readonly engine: TokenSpeedEngine,
-    private readonly isTokenGeneration: (name: string) => boolean,
-  ) {}
+  constructor(private readonly engine: TokenSpeedEngine) {}
 
   handle(event: MessageUpdatePayload): void {
     const toolCall =
@@ -96,8 +91,6 @@ export class ToolcallEndHandler implements MessageHandler {
       ];
     if (toolCall?.type !== "toolCall") return;
 
-    if (!this.isTokenGeneration(toolCall.name ?? "")) {
-      this.engine.pause();
-    }
+    this.engine.pause();
   }
 }
