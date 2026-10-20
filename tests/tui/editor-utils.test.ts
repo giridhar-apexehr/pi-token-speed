@@ -1,69 +1,35 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import type { ProviderOverride } from "../../src/config/types";
 import { fieldValue } from "../../src/ui/editor/utils";
-
-// ── Mock settings ──────────────────────────────────────────────────────────
-
-const settingsState = vi.hoisted(() => {
-  const makeDefaults = () => ({
-    display: "tps" as const,
-    slidingWindow: 5000,
-    useProviderTokens: false,
-    countStrategy: "direct" as const,
-    endTpsBehavior: "average" as const,
-    icon: "⚡",
-    updateInterval: 0,
-    thresholds: { slow: 10, medium: 30, fast: 60, blazing: 100 },
-    colors: {
-      slow: "#ffcc00",
-      medium: "#88cc00",
-      fast: "#44cc44",
-      blazing: "#00ccff",
-    },
-    displayColors: { count: "#111111", elapsed: "#222222", ttft: "#333333" },
-    providerOverrides: {},
-  });
-  let current: ReturnType<typeof makeDefaults> = makeDefaults();
-  return {
-    makeDefaults,
-    get config() {
-      return current;
-    },
-    set config(value: ReturnType<typeof makeDefaults>) {
-      current = value;
-    },
-  };
-});
-
-vi.mock("../../src/config/settings", () => ({
-  settings: {
-    getConfig: vi.fn(() => settingsState.config),
-    getDefaultConfig: vi.fn(() => settingsState.makeDefaults()),
-    setConfig: vi.fn(),
-  },
-}));
+import { makeSettingsMock } from "../mocks/settings";
 
 // ── Tests ────────────────────────────────────────────────────────────────────
 
 describe("fieldValue", () => {
+  let settings: ReturnType<typeof makeSettingsMock>;
+
   beforeEach(() => {
-    settingsState.config = settingsState.makeDefaults();
+    settings = makeSettingsMock({
+      displayColors: { count: "#111111", elapsed: "#222222", ttft: "#333333" },
+    });
   });
 
   describe("scalar fields", () => {
     it("returns BASE when the field is not overridden", () => {
-      expect(fieldValue("display", {})).toBe("(base)");
+      expect(fieldValue("display", {}, settings)).toBe("(base)");
     });
 
     it("returns the formatted override when set", () => {
-      expect(fieldValue("updateInterval", { updateInterval: 250 })).toBe("250");
+      expect(
+        fieldValue("updateInterval", { updateInterval: 250 }, settings),
+      ).toBe("250");
     });
   });
 
   describe("thresholds group row", () => {
     it("shows (base) for every tier when nothing is overridden", () => {
-      expect(fieldValue("thresholds", {})).toBe(
+      expect(fieldValue("thresholds", {}, settings)).toBe(
         "(base) | (base) | (base) | (base)",
       );
     });
@@ -72,7 +38,7 @@ describe("fieldValue", () => {
       const block: ProviderOverride = {
         thresholds: { medium: 25 },
       };
-      expect(fieldValue("thresholds", block)).toBe(
+      expect(fieldValue("thresholds", block, settings)).toBe(
         "(base) | 25 | (base) | (base)",
       );
     });
@@ -81,14 +47,14 @@ describe("fieldValue", () => {
       const block: ProviderOverride = {
         thresholds: { fast: 90 },
       };
-      expect(fieldValue("thresholds.fast", block)).toBe("90");
-      expect(fieldValue("thresholds.slow", block)).toBe("(base)");
+      expect(fieldValue("thresholds.fast", block, settings)).toBe("90");
+      expect(fieldValue("thresholds.slow", block, settings)).toBe("(base)");
     });
   });
 
   describe("colors group row", () => {
     it("renders one square per tier using the base colors", () => {
-      const value = fieldValue("colors", {});
+      const value = fieldValue("colors", {}, settings);
       expect(value.split("■").length - 1).toBe(4);
       expect(value).toContain("\x1b[38;2;255;204;0m"); // #ffcc00
       expect(value).toContain("\x1b[38;2;0;204;255m"); // #00ccff
@@ -98,7 +64,7 @@ describe("fieldValue", () => {
       const block: ProviderOverride = {
         colors: { medium: "#ff00ff" },
       };
-      const value = fieldValue("colors", block);
+      const value = fieldValue("colors", block, settings);
       expect(value).toContain("\x1b[38;2;255;0;255m"); // #ff00ff
       expect(value).toContain("\x1b[38;2;255;204;0m"); // base slow
     });
@@ -106,7 +72,7 @@ describe("fieldValue", () => {
 
   describe("displayColors group row", () => {
     it("renders one square per key using the base colors", () => {
-      const value = fieldValue("displayColors", {});
+      const value = fieldValue("displayColors", {}, settings);
       expect(value.split("■").length - 1).toBe(3);
       expect(value).toContain("\x1b[38;2;17;17;17m"); // #111111
     });
@@ -115,7 +81,7 @@ describe("fieldValue", () => {
       const block: ProviderOverride = {
         displayColors: { ttft: "#abcDEF" },
       };
-      const value = fieldValue("displayColors", block);
+      const value = fieldValue("displayColors", block, settings);
       expect(value).toContain("\x1b[38;2;171;205;239m"); // #abcdef
     });
   });

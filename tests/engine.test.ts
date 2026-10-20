@@ -1,67 +1,15 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
-import type { TokenSpeedConfig } from "../src/config/types";
 import { TokenSpeedEngine } from "../src/core/engine";
-import {
-  COLOR_BLAZING,
-  COLOR_FAST,
-  COLOR_MEDIUM,
-  COLOR_SLOW,
-} from "../src/settings/items/colors/color";
-import { COUNT_STRATEGY_DEFAULT } from "../src/settings/items/count-strategy";
-import { DISPLAY_MODE_DEFAULT } from "../src/settings/items/display";
-import { END_TPS_BEHAVIOR_DEFAULT } from "../src/settings/items/end-tps-behavior";
-import { FORMAT_DURATION_DEFAULT } from "../src/settings/items/format-duration";
-import { DEFAULT_ICON } from "../src/settings/items/icon";
-import { SLIDING_WINDOW_DEFAULT } from "../src/settings/items/sliding-window";
-import {
-  TPS_THRESHOLD_BLAZING,
-  TPS_THRESHOLD_FAST,
-  TPS_THRESHOLD_MEDIUM,
-  TPS_THRESHOLD_SLOW,
-} from "../src/settings/items/thresholds/threshold";
-import { UPDATE_INTERVAL_DEFAULT } from "../src/settings/items/update-interval";
-import { USE_PROVIDER_TOKENS_DEFAULT } from "../src/settings/items/use-provider-tokens";
-
-// The real settings module reads the user's settings file at import time
-// (getAgentDir); replace it with a controllable fake.
-const fakeConfig: TokenSpeedConfig = {
-  display: DISPLAY_MODE_DEFAULT,
-  slidingWindow: SLIDING_WINDOW_DEFAULT,
-  useProviderTokens: USE_PROVIDER_TOKENS_DEFAULT,
-  countStrategy: COUNT_STRATEGY_DEFAULT,
-  endTpsBehavior: END_TPS_BEHAVIOR_DEFAULT,
-  icon: DEFAULT_ICON,
-  updateInterval: UPDATE_INTERVAL_DEFAULT,
-  formatDuration: FORMAT_DURATION_DEFAULT,
-  thresholds: {
-    slow: TPS_THRESHOLD_SLOW,
-    medium: TPS_THRESHOLD_MEDIUM,
-    fast: TPS_THRESHOLD_FAST,
-    blazing: TPS_THRESHOLD_BLAZING,
-  },
-  colors: {
-    slow: COLOR_SLOW,
-    medium: COLOR_MEDIUM,
-    fast: COLOR_FAST,
-    blazing: COLOR_BLAZING,
-  },
-  displayColors: { count: "", elapsed: "", ttft: "" },
-  providerOverrides: {},
-};
-
-vi.mock("../src/config/settings", () => ({
-  settings: {
-    getConfig: () => fakeConfig,
-    getEffectiveConfig: (_providerId?: string) => fakeConfig,
-  },
-}));
+import { makeSettingsMock } from "./mocks/settings";
 
 describe("TokenSpeedEngine", () => {
+  let settings: ReturnType<typeof makeSettingsMock>;
   let engine: InstanceType<typeof TokenSpeedEngine>;
 
   beforeEach(() => {
-    engine = new TokenSpeedEngine();
+    settings = makeSettingsMock();
+    engine = new TokenSpeedEngine(settings);
     engine.initialize();
     engine.start();
   });
@@ -72,13 +20,13 @@ describe("TokenSpeedEngine", () => {
 
   describe("initialization", () => {
     it("is not streaming before start", () => {
-      const fresh = new TokenSpeedEngine();
+      const fresh = new TokenSpeedEngine(settings);
       fresh.initialize();
       expect(fresh.isStreaming).toBe(false);
     });
 
     it("ignores deltas when not streaming", () => {
-      const fresh = new TokenSpeedEngine();
+      const fresh = new TokenSpeedEngine(settings);
       fresh.initialize();
       fresh.recordDelta("hello");
       expect(fresh.tokenCount).toBe(0);
@@ -115,7 +63,7 @@ describe("TokenSpeedEngine", () => {
 
   describe("estimate counting", () => {
     const estimator = () => {
-      const est = new TokenSpeedEngine();
+      const est = new TokenSpeedEngine(settings);
       est.initialize();
       est.start();
       (est as unknown as { _countStrategy: string })._countStrategy =
@@ -139,7 +87,7 @@ describe("TokenSpeedEngine", () => {
 
   describe("provider tokens", () => {
     it("falls back to direct counting when provider tokens are disabled", () => {
-      const prov = new TokenSpeedEngine();
+      const prov = new TokenSpeedEngine(settings);
       prov.initialize();
       prov.start();
       // useProviderTokens is false by default: usageOutput is ignored and
@@ -149,7 +97,7 @@ describe("TokenSpeedEngine", () => {
     });
 
     it("uses the provider-reported increment when enabled", () => {
-      const prov = new TokenSpeedEngine();
+      const prov = new TokenSpeedEngine(settings);
       prov.initialize();
       prov.start();
       (prov as unknown as { _useProviderTokens: boolean })._useProviderTokens =
@@ -160,7 +108,7 @@ describe("TokenSpeedEngine", () => {
     });
 
     it("falls back to direct counting for non-increasing usage reports", () => {
-      const prov = new TokenSpeedEngine();
+      const prov = new TokenSpeedEngine(settings);
       prov.initialize();
       prov.start();
       (prov as unknown as { _useProviderTokens: boolean })._useProviderTokens =
@@ -243,7 +191,7 @@ describe("TokenSpeedEngine", () => {
     });
 
     it("keeps the last window value when endTpsBehavior is 'last'", () => {
-      const lastEngine = new TokenSpeedEngine();
+      const lastEngine = new TokenSpeedEngine(settings);
       lastEngine.initialize();
       (lastEngine as unknown as { _endTpsBehavior: string })._endTpsBehavior =
         "last";
@@ -255,7 +203,7 @@ describe("TokenSpeedEngine", () => {
     });
 
     it("average is 0 before any time has elapsed", () => {
-      const fresh = new TokenSpeedEngine();
+      const fresh = new TokenSpeedEngine(settings);
       fresh.initialize();
       expect(fresh.tpsAvg).toBe(0);
     });
@@ -274,13 +222,13 @@ describe("TokenSpeedEngine", () => {
     });
 
     it("can stop before initialization", () => {
-      const engine = new TokenSpeedEngine();
-      expect(() => engine.stop()).not.toThrow();
+      const eng = new TokenSpeedEngine(settings);
+      expect(() => eng.stop()).not.toThrow();
     });
 
     it("can start before initialization", () => {
-      const engine = new TokenSpeedEngine();
-      expect(() => engine.start()).not.toThrow();
+      const eng = new TokenSpeedEngine(settings);
+      expect(() => eng.start()).not.toThrow();
     });
   });
 });

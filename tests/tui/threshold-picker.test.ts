@@ -1,56 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { Theme } from "@earendil-works/pi-coding-agent";
-import type { TUI } from "@earendil-works/pi-tui";
 import { TIERS } from "../../src/settings/options";
 import { TierSubmenuBuilder } from "../../src/ui/color-picker";
-
-function makeTheme(): Theme {
-  return {
-    fg: (_name: string, text: string) => text,
-    bg: (_name: string, text: string) => text,
-    bold: (text: string) => text,
-    dim: (text: string) => text,
-  } as unknown as Theme;
-}
-
-function makeTui(): TUI {
-  return {
-    requestRender: vi.fn(),
-    invalidate: vi.fn(),
-    onTerminalColorSchemeChange: vi.fn(() => () => {}),
-  } as unknown as TUI;
-}
-
-// ── Mock settings ──────────────────────────────────────────────────────────
-
-vi.mock("../../src/config/settings", () => ({
-  settings: {
-    getConfig: vi.fn(() => ({
-      thresholds: { slow: 10, medium: 30, fast: 60, blazing: 100 },
-    })),
-  },
-}));
-
-vi.mock("@earendil-works/pi-coding-agent", async (importOriginal) => {
-  const actual: Record<string, unknown> = await importOriginal();
-  return {
-    ...actual,
-    getSettingsListTheme: () => ({}),
-  };
-});
+import { makeSettingsMock } from "../mocks/settings";
+import { makeTheme } from "../mocks/theme";
+import { makeTui } from "../mocks/tui";
 
 // ── Tests ────────────────────────────────────────────────────────────────────
 
 describe("TierSubmenuBuilder.buildThresholds", () => {
+  let settings: ReturnType<typeof makeSettingsMock>;
   let builder: TierSubmenuBuilder;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    builder = new TierSubmenuBuilder(makeTheme(), makeTui());
-  });
-  beforeEach(() => {
-    vi.clearAllMocks();
+    settings = makeSettingsMock({
+      thresholds: { slow: 10, medium: 30, fast: 60, blazing: 100 },
+    });
+    builder = new TierSubmenuBuilder(makeTheme(), makeTui(), settings);
   });
 
   it("returns one item per tier", () => {
@@ -88,11 +55,11 @@ describe("TierSubmenuBuilder.buildThresholds", () => {
     }
   });
 
-  it("reads the current config at call time (not cached)", async () => {
-    const { settings } = await import("../../src/config/settings");
-    (settings.getConfig as any).mockReturnValueOnce({
+  it("reads the current config at call time (not cached)", () => {
+    settings = makeSettingsMock({
       thresholds: { slow: 99, medium: 99, fast: 99, blazing: 99 },
     });
+    builder = new TierSubmenuBuilder(makeTheme(), makeTui(), settings);
 
     const items = builder.buildThresholds();
 

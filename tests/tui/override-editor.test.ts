@@ -1,62 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { Theme } from "@earendil-works/pi-coding-agent";
-import type { KeybindingsManager, TUI } from "@earendil-works/pi-tui";
+import type { KeybindingsManager } from "@earendil-works/pi-tui";
 import type { ProviderOverrides } from "../../src/config/types";
 import { OverrideSettingsMenu } from "../../src/settings/menu/override-settings-menu";
-
-function makeTheme(): Theme {
-  return {
-    fg: (_name: string, text: string) => text,
-    bg: (_name: string, text: string) => text,
-    bold: (text: string) => text,
-    dim: (text: string) => text,
-  } as unknown as Theme;
-}
-
-function makeTui(): TUI {
-  return {
-    requestRender: vi.fn(),
-    invalidate: vi.fn(),
-    onTerminalColorSchemeChange: vi.fn(() => () => {}),
-  } as unknown as TUI;
-}
-
-function makeKeybindings(): KeybindingsManager {
-  return {
-    matches: vi.fn(() => false),
-    getKeys: vi.fn(() => []),
-    getDefinition: vi.fn(),
-    getConflicts: vi.fn(() => []),
-    setUserBindings: vi.fn(),
-    getUserBindings: vi.fn(() => ({})),
-    getResolvedBindings: vi.fn(() => ({})),
-  } as unknown as KeybindingsManager;
-}
-
-// ── Mock settings (must be top-level for vitest) ────────────────────────────
-
-vi.mock("../../src/config/settings", () => ({
-  settings: {
-    getConfig: () => ({
-      display: "tps" as const,
-      slidingWindow: 5000,
-      useProviderTokens: false,
-      countStrategy: "direct" as const,
-      endTpsBehavior: "average" as const,
-      icon: "⚡",
-      updateInterval: 0,
-      thresholds: { slow: 10, medium: 30, fast: 60, blazing: 100 },
-      colors: {
-        slow: "#ffcc00",
-        medium: "#88cc00",
-        fast: "#44cc44",
-        blazing: "#00ccff",
-      },
-      providerOverrides: {},
-    }),
-  },
-}));
+import { makeSettingsMock } from "../mocks/settings";
+import { makeTheme } from "../mocks/theme";
+import { makeTui } from "../mocks/tui";
 
 vi.mock("@earendil-works/pi-coding-agent", async (importOriginal) => {
   const actual: Record<string, unknown> = await importOriginal();
@@ -73,6 +22,18 @@ vi.mock("@earendil-works/pi-coding-agent", async (importOriginal) => {
   };
 });
 
+function makeKeybindings(): KeybindingsManager {
+  return {
+    matches: vi.fn(() => false),
+    getKeys: vi.fn(() => []),
+    getDefinition: vi.fn(),
+    getConflicts: vi.fn(() => []),
+    setUserBindings: vi.fn(),
+    getUserBindings: vi.fn(() => ({})),
+    getResolvedBindings: vi.fn(() => ({})),
+  } as unknown as KeybindingsManager;
+}
+
 // ── Harness ──────────────────────────────────────────────────────────────────
 
 function makeHarness(initial: ProviderOverrides = {}) {
@@ -81,11 +42,13 @@ function makeHarness(initial: ProviderOverrides = {}) {
     Object.keys(overrides).forEach((k) => delete overrides[k]);
     Object.assign(overrides, next);
   });
+  const settings = makeSettingsMock();
   const menu = new OverrideSettingsMenu({
     overrides,
     persist,
     onSettingChange: vi.fn(),
     onWarning: vi.fn(),
+    settings,
   });
   const tui = makeTui();
   const theme = makeTheme();

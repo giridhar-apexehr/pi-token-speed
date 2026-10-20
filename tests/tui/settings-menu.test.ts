@@ -1,16 +1,30 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { Theme } from "@earendil-works/pi-coding-agent";
-import type { SettingItem, TUI } from "@earendil-works/pi-tui";
-import { settings } from "../../src/config/settings";
+import type { SettingItem } from "@earendil-works/pi-tui";
 import { SettingsMenu } from "../../src/settings/menu/settings-menu";
+import { makeSettingsMock } from "../mocks/settings";
+import { makeTheme } from "../mocks/theme";
+import { makeTui } from "../mocks/tui";
 
-// ── Mock settings ──────────────────────────────────────────────────────────
+// Mock getSettingsListTheme before the module loads
+vi.mock("@earendil-works/pi-coding-agent", async (importOriginal) => {
+  const actual: Record<string, unknown> = await importOriginal();
+  return {
+    ...actual,
+    getSettingsListTheme: () => ({
+      label: (text: string, selected?: boolean) =>
+        selected ? `\x1b[38;5;203m${text}\x1b[0m` : text,
+      value: (text: string, selected?: boolean) =>
+        selected ? `\x1b[38;5;203m${text}\x1b[0m` : `\x1b[2m${text}\x1b[0m`,
+      description: (text: string) => `\x1b[2m${text}\x1b[0m`,
+      cursor: "\x1b[38;5;203m→\x1b[0m",
+      hint: (text: string) => `\x1b[2m${text}\x1b[0m`,
+    }),
+  };
+});
 
-// Stateful mock mirroring the real `Settings` semantics: `setConfig`
-// replaces the cached config with a NEW merged object (like `mergeConfig`),
-// so references captured earlier (e.g. a menu's `opts.config` snapshot)
-// become stale. This is what makes a stale-submenu regression detectable.
+// ── Mock settings (stateful, mirrors real Settings semantics) ────────────────
+
 const settingsState = vi.hoisted(() => {
   const makeDefaults = () => ({
     display: "tps" as const,
@@ -20,6 +34,7 @@ const settingsState = vi.hoisted(() => {
     endTpsBehavior: "average" as const,
     icon: "⚡",
     updateInterval: 0,
+    formatDuration: false,
     thresholds: { slow: 10, medium: 30, fast: 60, blazing: 100 },
     colors: {
       slow: "#ffcc00",
@@ -43,10 +58,8 @@ const settingsState = vi.hoisted(() => {
 });
 
 /**
- * Merges a partial config into the mocked cache, replacing the cached
- * object (same semantics as the real `mergeConfig`).
- *
- * @param partial The partial config to apply.
+ * Merges a partial config into the mocked cache (same semantics as the real
+ * `mergeConfig`).
  */
 async function mockSetConfig(partial: Record<string, unknown>): Promise<void> {
   const current = settingsState.config;
@@ -72,55 +85,24 @@ async function mockSetConfig(partial: Record<string, unknown>): Promise<void> {
   } as typeof current;
 }
 
-vi.mock("../../src/config/settings", () => ({
-  settings: {
-    getConfig: vi.fn(() => settingsState.config),
-    getDefaultConfig: vi.fn(() => settingsState.makeDefaults()),
-    setConfig: vi.fn(mockSetConfig),
-  },
-}));
-
-vi.mock("@earendil-works/pi-coding-agent", async (importOriginal) => {
-  const actual: Record<string, unknown> = await importOriginal();
-  return {
-    ...actual,
-    getSettingsListTheme: () => ({}),
-  };
-});
-
-// ── Minimal mocks ──────────────────────────────────────────────────────────
-
-function makeTheme(): Theme {
-  return {
-    fg: (_name: string, text: string) => text,
-    bg: (_name: string, text: string) => text,
-    bold: (text: string) => text,
-    dim: (text: string) => text,
-  } as unknown as Theme;
-}
-
-function makeTui(): TUI {
-  return {
-    requestRender: vi.fn(),
-    invalidate: vi.fn(),
-    onTerminalColorSchemeChange: vi.fn(() => () => {}),
-  } as unknown as TUI;
-}
-
 // ── Tests ────────────────────────────────────────────────────────────────────
 
 describe("SettingsMenu", () => {
   let menu: SettingsMenu;
+  let settings: ReturnType<typeof makeSettingsMock>;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    // clearAllMocks() wipes the stateful setConfig implementation set by
-    // earlier tests (e.g. mockResolvedValue) — restore it.
-    (settings.setConfig as any).mockImplementation(mockSetConfig);
     settingsState.config = settingsState.makeDefaults();
+    settings = makeSettingsMock(settingsState.config);
+    // Wire mock so setConfig and getConfig always read/write settingsState
+    (settings.setConfig as any).mockImplementation(mockSetConfig);
+    settings.getConfig = () => settingsState.config;
+    settings.resolveConfig = () => settingsState.config;
     menu = new SettingsMenu({
-      config: settings.getConfig(),
+      config: settingsState.config,
       onSettingChange: vi.fn(),
+      settings,
     });
   });
 
@@ -296,9 +278,8 @@ describe("SettingsMenu", () => {
       const menu2 = new SettingsMenu({
         config: settings.getConfig(),
         onSettingChange,
+        settings,
       });
-
-      (settings.setConfig as any).mockResolvedValue(undefined);
 
       await (menu2 as any).handleSettingChange("display", "TPS speed");
 
@@ -310,9 +291,8 @@ describe("SettingsMenu", () => {
       const menu2 = new SettingsMenu({
         config: settings.getConfig(),
         onSettingChange,
+        settings,
       });
-
-      (settings.setConfig as any).mockResolvedValue(undefined);
 
       await (menu2 as any).handleSettingChange("display", "invalid-value");
 
@@ -326,10 +306,10 @@ describe("SettingsMenu", () => {
         config: settings.getConfig(),
         onSettingChange,
         onWarning,
+        settings,
       });
 
-      // Default config has fast=60; medium=50 is fine... use 70 instead
-      // (greater than fast), which must be rejected with a warning.
+      // Default config has fast=60; use 70 (greater than fast), which must be rejected.
       await (menu2 as any).handleSettingChange("thresholds.medium", "70");
 
       expect(onWarning).toHaveBeenCalled();
@@ -345,6 +325,7 @@ describe("SettingsMenu", () => {
         config: settings.getConfig(),
         onSettingChange,
         onWarning,
+        settings,
       });
 
       await (menu2 as any).handleSettingChange("thresholds.medium", "40");

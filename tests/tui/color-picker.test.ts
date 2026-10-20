@@ -1,50 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { Theme } from "@earendil-works/pi-coding-agent";
-import type { TUI } from "@earendil-works/pi-tui";
 import { TIERS } from "../../src/settings/options";
 import { truecolor } from "../../src/ui/ansi";
 import { TierSubmenuBuilder } from "../../src/ui/color-picker";
-
-function makeTheme(): Theme {
-  return {
-    fg: (_name: string, text: string) => text,
-    bg: (_name: string, text: string) => text,
-    bold: (text: string) => text,
-    dim: (text: string) => text,
-  } as unknown as Theme;
-}
-
-function makeTui(): TUI {
-  return {
-    requestRender: vi.fn(),
-    invalidate: vi.fn(),
-    onTerminalColorSchemeChange: vi.fn(() => () => {}),
-  } as unknown as TUI;
-}
-
-// ── Mock settings ──────────────────────────────────────────────────────────
-
-vi.mock("../../src/config/settings", () => ({
-  settings: {
-    getConfig: vi.fn(() => ({
-      colors: {
-        slow: "#ffcc00",
-        medium: "#88cc00",
-        fast: "#44cc44",
-        blazing: "#00ccff",
-      },
-    })),
-  },
-}));
-
-vi.mock("@earendil-works/pi-coding-agent", async (importOriginal) => {
-  const actual: Record<string, unknown> = await importOriginal();
-  return {
-    ...actual,
-    getSettingsListTheme: () => ({}),
-  };
-});
+import { makeSettingsMock } from "../mocks/settings";
+import { makeTheme } from "../mocks/theme";
+import { makeTui } from "../mocks/tui";
 
 // ── Tests ────────────────────────────────────────────────────────────────────
 
@@ -63,11 +24,20 @@ describe("truecolor", () => {
 });
 
 describe("TierSubmenuBuilder.buildColors", () => {
+  let settings: ReturnType<typeof makeSettingsMock>;
   let builder: TierSubmenuBuilder;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    builder = new TierSubmenuBuilder(makeTheme(), makeTui());
+    settings = makeSettingsMock({
+      colors: {
+        slow: "#ffcc00",
+        medium: "#88cc00",
+        fast: "#44cc44",
+        blazing: "#00ccff",
+      },
+    });
+    builder = new TierSubmenuBuilder(makeTheme(), makeTui(), settings);
   });
 
   it("returns one item per tier", () => {
@@ -111,9 +81,8 @@ describe("TierSubmenuBuilder.buildColors", () => {
     }
   });
 
-  it("reads the current config at call time (not cached)", async () => {
-    const { settings } = await import("../../src/config/settings");
-    (settings.getConfig as any).mockReturnValueOnce({
+  it("reads the current config at call time (not cached)", () => {
+    settings = makeSettingsMock({
       colors: {
         slow: "#000000",
         medium: "#111111",
@@ -121,6 +90,7 @@ describe("TierSubmenuBuilder.buildColors", () => {
         blazing: "#333333",
       },
     });
+    builder = new TierSubmenuBuilder(makeTheme(), makeTui(), settings);
 
     const items = builder.buildColors();
 

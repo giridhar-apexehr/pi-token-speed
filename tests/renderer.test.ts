@@ -6,47 +6,54 @@ import type { TokenSpeedConfig } from "../src/config/types";
 import { TokenSpeedEngine } from "../src/core/engine";
 import { Renderer } from "../src/ui/renderer";
 
-// ---------- mock settings (must be top-level for vitest) ----------
+// Mutable config so tests can override settings mid-flight
+const configRef: { current: TokenSpeedConfig } = {
+  current: {
+    display: "tps",
+    slidingWindow: 5000,
+    useProviderTokens: false,
+    countStrategy: "direct",
+    endTpsBehavior: "average",
+    icon: "⚡",
+    updateInterval: 0,
+    formatDuration: false,
+    thresholds: { slow: 10, medium: 30, fast: 60, blazing: 100 },
+    colors: {
+      slow: "#ffcc00",
+      medium: "#88cc00",
+      fast: "#44cc44",
+      blazing: "#00ccff",
+    },
+    displayColors: { count: "", elapsed: "", ttft: "" },
+    providerOverrides: {},
+  },
+};
 
 const makeConfig = (
   partial: Partial<TokenSpeedConfig> = {},
 ): TokenSpeedConfig => ({
-  display: "tps",
-  slidingWindow: 5000,
-  useProviderTokens: false,
-  countStrategy: "direct",
-  endTpsBehavior: "average",
-  icon: "⚡",
-  updateInterval: 0,
-  formatDuration: false,
-  thresholds: { slow: 10, medium: 30, fast: 60, blazing: 100 },
-  colors: {
-    slow: "#ffcc00",
-    medium: "#88cc00",
-    fast: "#44cc44",
-    blazing: "#00ccff",
-  },
-  displayColors: { count: "", elapsed: "", ttft: "" },
-  providerOverrides: {},
+  ...configRef.current,
   ...partial,
 });
 
-// Mutable container so the mock closure always reads the latest value
-const configRef: { current: TokenSpeedConfig } = { current: makeConfig() };
-
-vi.mock("../src/config/settings", () => ({
-  settings: {
-    getConfig: () => configRef.current,
-    getEffectiveConfig: () => configRef.current,
-  },
-}));
-
 // ---------- helpers ----------
+
+// Shared settings mock that always reads configRef.current
+const settings = {
+  getConfig: () => configRef.current,
+  resolveConfig: () => configRef.current,
+  setConfig: async () => {},
+  resetKeys: async () => {},
+  setProviderOverrides: async () => {},
+  getDefaultConfig: () => configRef.current,
+  getErrors: () => [],
+  initialize: async () => configRef.current,
+};
 
 const makeEngine = (
   overrides?: Partial<TokenSpeedEngine>,
 ): TokenSpeedEngine => {
-  const engine = new TokenSpeedEngine();
+  const engine = new TokenSpeedEngine(settings as any);
   engine.initialize();
   engine.start();
   Object.assign(engine, overrides);
@@ -101,11 +108,29 @@ describe("Renderer", () => {
   let renderer: Renderer;
 
   beforeEach(() => {
-    // Reset to default config (no throttle)
-    configRef.current = makeConfig();
+    // Reset to clean default config (no throttle)
+    configRef.current = {
+      display: "tps",
+      slidingWindow: 5000,
+      useProviderTokens: false,
+      countStrategy: "direct",
+      endTpsBehavior: "average",
+      icon: "⚡",
+      updateInterval: 0,
+      formatDuration: false,
+      thresholds: { slow: 10, medium: 30, fast: 60, blazing: 100 },
+      colors: {
+        slow: "#ffcc00",
+        medium: "#88cc00",
+        fast: "#44cc44",
+        blazing: "#00ccff",
+      },
+      displayColors: { count: "", elapsed: "", ttft: "" },
+      providerOverrides: {},
+    };
     engine = makeEngine();
     ctx = makeContext();
-    renderer = new Renderer(engine);
+    renderer = new Renderer(engine, settings as any);
   });
 
   // ---- update / throttle ----
@@ -126,7 +151,7 @@ describe("Renderer", () => {
 
     it("throttles subsequent calls within the interval", () => {
       configRef.current = makeConfig({ updateInterval: 500 });
-      renderer = new Renderer(engine);
+      renderer = new Renderer(engine, settings as any);
       const renderSpy = vi.spyOn(renderer as any, "render");
 
       renderer.update(ctx);
@@ -161,7 +186,7 @@ describe("Renderer", () => {
     it("uses the configured icon as prefix", () => {
       const setStatusSpy = vi.spyOn(ctx.ui, "setStatus");
       configRef.current = makeConfig({ icon: "🚀" });
-      renderer = new Renderer(engine);
+      renderer = new Renderer(engine, settings as any);
       engine["_tps"] = 10;
 
       (renderer as any).render(ctx);
@@ -175,7 +200,7 @@ describe("Renderer", () => {
     it("omits the icon when disabled", () => {
       const setStatusSpy = vi.spyOn(ctx.ui, "setStatus");
       configRef.current = makeConfig({ icon: "" });
-      renderer = new Renderer(engine);
+      renderer = new Renderer(engine, settings as any);
       engine["_tps"] = 10;
 
       (renderer as any).render(ctx);
@@ -238,7 +263,7 @@ describe("Renderer", () => {
     ])("renders suffix for display mode '%s'", (mode: string) => {
       const setStatusSpy = vi.spyOn(ctx.ui, "setStatus");
       configRef.current = makeConfig({ display: mode as any });
-      renderer = new Renderer(engine);
+      renderer = new Renderer(engine, settings as any);
       engine["_tps"] = 30;
 
       (renderer as any).render(ctx);
@@ -400,6 +425,29 @@ describe("Renderer", () => {
   // ---- initialize ----
 
   describe("initialize", () => {
+    beforeEach(() => {
+      configRef.current = {
+        display: "tps",
+        slidingWindow: 5000,
+        useProviderTokens: false,
+        countStrategy: "direct",
+        endTpsBehavior: "average",
+        icon: "⚡",
+        updateInterval: 0,
+        formatDuration: false,
+        thresholds: { slow: 10, medium: 30, fast: 60, blazing: 100 },
+        colors: {
+          slow: "#ffcc00",
+          medium: "#88cc00",
+          fast: "#44cc44",
+          blazing: "#00ccff",
+        },
+        displayColors: { count: "", elapsed: "", ttft: "" },
+        providerOverrides: {},
+      };
+      renderer = new Renderer(engine, settings as any);
+    });
+
     it("sets the status bar to a placeholder with TPS: --", () => {
       const setStatusSpy = vi.spyOn(ctx.ui, "setStatus");
 
@@ -411,7 +459,7 @@ describe("Renderer", () => {
     it("omits icon when icon is empty", () => {
       const setStatusSpy = vi.spyOn(ctx.ui, "setStatus");
       configRef.current = makeConfig({ icon: "" });
-      renderer = new Renderer(engine);
+      renderer = new Renderer(engine, settings as any);
 
       renderer.initialize(ctx);
 
@@ -496,7 +544,7 @@ describe("Renderer", () => {
         display: "stats",
         displayColors: { count: "#00ff88", elapsed: "#ffaa00", ttft: "" },
       });
-      renderer = new Renderer(engine);
+      renderer = new Renderer(engine, settings as any);
       engine["_tokenCount"] = 200;
       engine["_startTime"] = Date.now() - 5000;
       engine["_endTime"] = Date.now();
@@ -515,7 +563,7 @@ describe("Renderer", () => {
         display: "ttft",
         displayColors: { count: "", elapsed: "", ttft: "#44ddff" },
       });
-      renderer = new Renderer(engine);
+      renderer = new Renderer(engine, settings as any);
       engine["_ttftEnd"] = 450;
       engine["_ttftStart"] = 0;
 
@@ -536,7 +584,7 @@ describe("Renderer", () => {
           ttft: "#44ddff",
         },
       });
-      renderer = new Renderer(engine);
+      renderer = new Renderer(engine, settings as any);
       engine["_tokenCount"] = 200;
       engine["_startTime"] = Date.now() - 5000;
       engine["_endTime"] = Date.now();
