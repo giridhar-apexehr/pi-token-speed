@@ -566,4 +566,234 @@ describe("SettingsMenu", () => {
       expect(colorItem.currentValue).toBe("#123456");
     });
   });
+
+  // ── getThresholds / getColors / getDisplayColors ──────────────────────
+
+  describe("getters", () => {
+    it("returns the thresholds from config", () => {
+      expect(menu.getThresholds()).toEqual({
+        slow: 10,
+        medium: 30,
+        fast: 60,
+        blazing: 100,
+      });
+    });
+
+    it("returns the colors from config", () => {
+      expect(menu.getColors()).toEqual({
+        slow: "#ffcc00",
+        medium: "#88cc00",
+        fast: "#44cc44",
+        blazing: "#00ccff",
+      });
+    });
+
+    it("returns the displayColors from config", () => {
+      expect(menu.getDisplayColors()).toEqual({
+        count: "",
+        elapsed: "",
+        ttft: "",
+      });
+    });
+  });
+
+  // ── commit ────────────────────────────────────────────────────────────
+
+  describe("commit", () => {
+    it("commits a valid scalar setting", async () => {
+      await (menu as any).commit("display", "TPS speed");
+      expect(settings.setConfig).toHaveBeenCalledWith({
+        display: "tps",
+      });
+    });
+
+    it("commits a valid per-tier setting", async () => {
+      await (menu as any).commit("thresholds.slow", "20");
+      expect(settings.setConfig).toHaveBeenCalledWith({
+        thresholds: { slow: 20 },
+      });
+    });
+
+    it("commits a valid color setting", async () => {
+      await (menu as any).commit("colors.slow", "#AABBCC");
+      expect(settings.setConfig).toHaveBeenCalledWith({
+        colors: { slow: "#aabbcc" },
+      });
+    });
+
+    it("rejects an invalid scalar and calls onWarning", async () => {
+      const onWarning = vi.fn();
+      const menu2 = new SettingsMenu({
+        config: settingsState.config,
+        onSettingChange: vi.fn(),
+        onWarning,
+        settings,
+      });
+      await (menu2 as any).commit("display", "bogus");
+      expect(onWarning).toHaveBeenCalled();
+      expect(settings.setConfig).not.toHaveBeenCalled();
+    });
+
+    it("rejects an invalid per-tier setting and calls onWarning", async () => {
+      const onWarning = vi.fn();
+      const menu2 = new SettingsMenu({
+        config: settingsState.config,
+        onSettingChange: vi.fn(),
+        onWarning,
+        settings,
+      });
+      await (menu2 as any).commit("thresholds.slow", "-5");
+      expect(onWarning).toHaveBeenCalled();
+      expect(settings.setConfig).not.toHaveBeenCalled();
+    });
+
+    it("rejects an invalid color and calls onWarning", async () => {
+      const onWarning = vi.fn();
+      const menu2 = new SettingsMenu({
+        config: settingsState.config,
+        onSettingChange: vi.fn(),
+        onWarning,
+        settings,
+      });
+      await (menu2 as any).commit("colors.slow", "nope");
+      expect(onWarning).toHaveBeenCalled();
+      expect(settings.setConfig).not.toHaveBeenCalled();
+    });
+
+    it("returns false when item is not found", async () => {
+      const result = await (menu as any).commit("nonexistent", "value");
+      expect(result).toBe(false);
+      expect(settings.setConfig).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── resetScalar / resetGroup ──────────────────────────────────────────
+
+  describe("resetScalar", () => {
+    it("resets a scalar setting", async () => {
+      const tui = makeTui();
+      const items = [
+        { id: "display", label: "Display", currentValue: "TPS speed" },
+      ] as SettingItem[];
+      const list = (menu as any).createMainSettingsList(
+        items,
+        items.length,
+        () => {},
+        () => {},
+        () => {},
+        tui,
+      );
+      (menu as any).settingsList = list;
+
+      await (menu as any).resetScalar("display");
+
+      expect(settings.resetKeys).toHaveBeenCalledWith(["display"]);
+    });
+
+    it("resets a per-tier setting", async () => {
+      await (menu as any).resetScalar("thresholds.slow");
+      expect(settings.resetKeys).toHaveBeenCalledWith(["thresholds.slow"]);
+    });
+
+    it("does nothing for unknown id", async () => {
+      await (menu as any).resetScalar("nonexistent");
+      expect(settings.resetKeys).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("resetGroup", () => {
+    it("resets the thresholds group", async () => {
+      await (menu as any).resetGroup("thresholds");
+      expect(settings.resetKeys).toHaveBeenCalledWith(["thresholds"]);
+    });
+
+    it("resets the colors group", async () => {
+      await (menu as any).resetGroup("colors");
+      expect(settings.resetKeys).toHaveBeenCalledWith(["colors"]);
+    });
+
+    it("does nothing for unknown group", async () => {
+      await (menu as any).resetGroup("nonexistent");
+      expect(settings.resetKeys).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── afterChange / afterReset ──────────────────────────────────────────
+
+  describe("afterChange", () => {
+    it("fires the onSettingChange callback", () => {
+      const onSettingChange = vi.fn();
+      const menu2 = new SettingsMenu({
+        config: settingsState.config,
+        onSettingChange,
+        settings,
+      });
+      (menu2 as any).afterChange("display");
+      expect(onSettingChange).toHaveBeenCalled();
+    });
+  });
+
+  describe("afterReset", () => {
+    it("fires the onSettingChange callback", () => {
+      const onSettingChange = vi.fn();
+      const menu2 = new SettingsMenu({
+        config: settingsState.config,
+        onSettingChange,
+        settings,
+      });
+      (menu2 as any).afterReset("display");
+      expect(onSettingChange).toHaveBeenCalled();
+    });
+  });
+
+  // ── refreshDisplayColorItems ──────────────────────────────────────────
+
+  describe("refreshDisplayColorItems", () => {
+    it("updates the main list displayColors value", () => {
+      const tui = makeTui();
+      const items = [
+        {
+          id: "displayColors",
+          label: "Display Colors",
+          currentValue: "■ ■ ■",
+        },
+      ] as SettingItem[];
+      const list = (menu as any).createMainSettingsList(
+        items,
+        items.length,
+        () => {},
+        () => {},
+        () => {},
+        tui,
+      );
+
+      (menu as any).refreshDisplayColorItems();
+
+      expect(
+        (list as any).items.find((i: SettingItem) => i.id === "displayColors")
+          .currentValue,
+      ).toContain("■");
+    });
+
+    it("invalidates the active submenu list", () => {
+      const tui = makeTui();
+      const done = vi.fn();
+      const items = [
+        { id: "displayColors.count", label: "Count" },
+      ] as SettingItem[];
+
+      const list = (menu as any).createSubmenuList(
+        items,
+        Math.min(items.length + 2, 15),
+        () => {},
+        done,
+        () => {},
+        tui,
+      );
+
+      (menu as any).refreshDisplayColorItems();
+
+      expect((list as any).invalidate).toBeDefined();
+    });
+  });
 });

@@ -23,7 +23,7 @@ export class HexColorInput extends Input {
    * color input (`#` and `0-9A-Fa-f`), rejecting control sequences and
    * non-hex printable characters.
    */
-  private isHexCharacterInsert(data: string): boolean {
+  protected isHexCharacterInsert(data: string): boolean {
     if (data.startsWith("\x1b")) return false;
     if (
       [...data].some((ch) => {

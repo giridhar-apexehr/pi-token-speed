@@ -53,9 +53,9 @@ export function makeSettingsMock(
     getErrors: () => [],
     getDefaultConfig: makeDefaults,
     setConfig: vi.fn(defaultSetConfig),
-    resetKeys: async (_keys: string[]) => {
+    resetKeys: vi.fn(async (_keys: string[]) => {
       current = makeDefaults();
-    },
+    }),
     setProviderOverrides: async (overrides: Record<string, unknown>) => {
       current = { ...current, providerOverrides: overrides as any };
     },
