@@ -4,6 +4,7 @@ import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { STATUS_KEY } from "../src/config/constants";
 import type { TokenSpeedConfig } from "../src/config/types";
 import { TokenSpeedEngine } from "../src/core/engine";
+import { EditorBorderStatus } from "../src/ui/tps-editor";
 import { Renderer } from "../src/ui/renderer";
 
 // Mutable config so tests can override settings mid-flight
@@ -15,6 +16,7 @@ const configRef: { current: TokenSpeedConfig } = {
     countStrategy: "direct",
     endTpsBehavior: "average",
     icon: "⚡",
+    placement: "footer",
     updateInterval: 0,
     formatDuration: false,
     thresholds: { slow: 10, medium: 30, fast: 60, blazing: 100 },
@@ -106,6 +108,7 @@ describe("Renderer", () => {
   let engine: TokenSpeedEngine;
   let ctx: ExtensionContext;
   let renderer: Renderer;
+  let borderStatus: EditorBorderStatus;
 
   beforeEach(() => {
     // Reset to clean default config (no throttle)
@@ -116,6 +119,7 @@ describe("Renderer", () => {
       countStrategy: "direct",
       endTpsBehavior: "average",
       icon: "⚡",
+      placement: "footer",
       updateInterval: 0,
       formatDuration: false,
       thresholds: { slow: 10, medium: 30, fast: 60, blazing: 100 },
@@ -130,7 +134,8 @@ describe("Renderer", () => {
     };
     engine = makeEngine();
     ctx = makeContext();
-    renderer = new Renderer(engine, settings as any);
+    borderStatus = new EditorBorderStatus();
+    renderer = new Renderer(engine, settings as any, borderStatus);
   });
 
   // ---- update / throttle ----
@@ -151,7 +156,7 @@ describe("Renderer", () => {
 
     it("throttles subsequent calls within the interval", () => {
       configRef.current = makeConfig({ updateInterval: 500 });
-      renderer = new Renderer(engine, settings as any);
+      renderer = new Renderer(engine, settings as any, borderStatus);
       const renderSpy = vi.spyOn(renderer as any, "render");
 
       renderer.update(ctx);
@@ -165,6 +170,23 @@ describe("Renderer", () => {
       (renderer as any).lastUpdateTime = Date.now() - 600;
       renderer.update(ctx);
       expect(renderSpy).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // ---- refresh ----
+
+  describe("refresh", () => {
+    it("renders immediately even inside the throttle window", () => {
+      configRef.current = makeConfig({ updateInterval: 10000 });
+      renderer = new Renderer(engine, settings as any, borderStatus);
+      renderer.update(ctx);
+      const renderSpy = vi.spyOn(renderer as any, "render");
+
+      renderer.update(ctx);
+      expect(renderSpy).not.toHaveBeenCalled();
+
+      renderer.refresh(ctx);
+      expect(renderSpy).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -186,7 +208,7 @@ describe("Renderer", () => {
     it("uses the configured icon as prefix", () => {
       const setStatusSpy = vi.spyOn(ctx.ui, "setStatus");
       configRef.current = makeConfig({ icon: "🚀" });
-      renderer = new Renderer(engine, settings as any);
+      renderer = new Renderer(engine, settings as any, borderStatus);
       engine["_tps"] = 10;
 
       (renderer as any).render(ctx);
@@ -200,7 +222,7 @@ describe("Renderer", () => {
     it("omits the icon when disabled", () => {
       const setStatusSpy = vi.spyOn(ctx.ui, "setStatus");
       configRef.current = makeConfig({ icon: "" });
-      renderer = new Renderer(engine, settings as any);
+      renderer = new Renderer(engine, settings as any, borderStatus);
       engine["_tps"] = 10;
 
       (renderer as any).render(ctx);
@@ -263,7 +285,7 @@ describe("Renderer", () => {
     ])("renders suffix for display mode '%s'", (mode: string) => {
       const setStatusSpy = vi.spyOn(ctx.ui, "setStatus");
       configRef.current = makeConfig({ display: mode as any });
-      renderer = new Renderer(engine, settings as any);
+      renderer = new Renderer(engine, settings as any, borderStatus);
       engine["_tps"] = 30;
 
       (renderer as any).render(ctx);
@@ -433,6 +455,7 @@ describe("Renderer", () => {
         countStrategy: "direct",
         endTpsBehavior: "average",
         icon: "⚡",
+        placement: "footer",
         updateInterval: 0,
         formatDuration: false,
         thresholds: { slow: 10, medium: 30, fast: 60, blazing: 100 },
@@ -445,7 +468,7 @@ describe("Renderer", () => {
         displayColors: { count: "", elapsed: "", ttft: "" },
         providerOverrides: {},
       };
-      renderer = new Renderer(engine, settings as any);
+      renderer = new Renderer(engine, settings as any, borderStatus);
     });
 
     it("sets the status bar to a placeholder with TPS: --", () => {
@@ -459,7 +482,7 @@ describe("Renderer", () => {
     it("omits icon when icon is empty", () => {
       const setStatusSpy = vi.spyOn(ctx.ui, "setStatus");
       configRef.current = makeConfig({ icon: "" });
-      renderer = new Renderer(engine, settings as any);
+      renderer = new Renderer(engine, settings as any, borderStatus);
 
       renderer.initialize(ctx);
 
@@ -544,7 +567,7 @@ describe("Renderer", () => {
         display: "stats",
         displayColors: { count: "#00ff88", elapsed: "#ffaa00", ttft: "" },
       });
-      renderer = new Renderer(engine, settings as any);
+      renderer = new Renderer(engine, settings as any, borderStatus);
       engine["_tokenCount"] = 200;
       engine["_startTime"] = Date.now() - 5000;
       engine["_endTime"] = Date.now();
@@ -563,7 +586,7 @@ describe("Renderer", () => {
         display: "ttft",
         displayColors: { count: "", elapsed: "", ttft: "#44ddff" },
       });
-      renderer = new Renderer(engine, settings as any);
+      renderer = new Renderer(engine, settings as any, borderStatus);
       engine["_ttftEnd"] = 450;
       engine["_ttftStart"] = 0;
 
@@ -584,7 +607,7 @@ describe("Renderer", () => {
           ttft: "#44ddff",
         },
       });
-      renderer = new Renderer(engine, settings as any);
+      renderer = new Renderer(engine, settings as any, borderStatus);
       engine["_tokenCount"] = 200;
       engine["_startTime"] = Date.now() - 5000;
       engine["_endTime"] = Date.now();
@@ -599,6 +622,91 @@ describe("Renderer", () => {
       expect(calledWith).toContain("\x1b[38;2;0;255;136m");
       expect(calledWith).toContain("\x1b[38;2;255;170;0m");
       expect(calledWith).toContain("\x1b[38;2;68;221;255m");
+    });
+  });
+
+  // ---- placement ----
+
+  describe("placement", () => {
+    /** Attaches a fake editor so the border status reports a mounted editor. */
+    const mountEditor = (): { refresh: ReturnType<typeof vi.fn> } => {
+      const editor = { refresh: vi.fn() };
+      borderStatus.attach(editor as any);
+      return editor;
+    };
+
+    it("defaults to the footer even when an editor is mounted", () => {
+      const setStatusSpy = vi.spyOn(ctx.ui, "setStatus");
+      const editor = mountEditor();
+      engine["_tps"] = 42.5;
+
+      (renderer as any).render(ctx);
+
+      expect(setStatusSpy).toHaveBeenCalledWith(
+        STATUS_KEY,
+        expect.stringContaining("42.5 tok/s"),
+      );
+      expect(borderStatus.get()).toBe("");
+      expect(editor.refresh).not.toHaveBeenCalled();
+    });
+
+    it("draws the readout on the editor border when placement is border", () => {
+      const setStatusSpy = vi.spyOn(ctx.ui, "setStatus");
+      const editor = mountEditor();
+      configRef.current = makeConfig({ placement: "border" });
+      engine["_tps"] = 42.5;
+
+      (renderer as any).render(ctx);
+
+      expect(setStatusSpy).not.toHaveBeenCalled();
+      expect(borderStatus.get()).toContain("42.5 tok/s");
+      expect(editor.refresh).toHaveBeenCalled();
+    });
+
+    it("draws the placeholder on the editor border", () => {
+      const setStatusSpy = vi.spyOn(ctx.ui, "setStatus");
+      const editor = mountEditor();
+      configRef.current = makeConfig({ placement: "border" });
+
+      renderer.initialize(ctx);
+
+      expect(setStatusSpy).not.toHaveBeenCalled();
+      expect(borderStatus.get()).toBe("⚡ TPS: --");
+      expect(editor.refresh).toHaveBeenCalled();
+    });
+
+    it("clears a stale border label when switching back to the footer", () => {
+      mountEditor();
+      engine["_tps"] = 42.5;
+      configRef.current = makeConfig({ placement: "border" });
+      (renderer as any).render(ctx);
+      expect(borderStatus.get()).not.toBe("");
+
+      configRef.current = makeConfig({ placement: "footer" });
+      (renderer as any).render(ctx);
+
+      expect(borderStatus.get()).toBe("");
+    });
+
+    it("skips refreshes when the readout did not change", () => {
+      const editor = mountEditor();
+      configRef.current = makeConfig({ placement: "border" });
+      engine["_tps"] = 42.5;
+
+      (renderer as any).render(ctx);
+      (renderer as any).render(ctx);
+
+      expect(editor.refresh).toHaveBeenCalledTimes(1);
+    });
+
+    it("falls back to the footer when no editor is mounted", () => {
+      const setStatusSpy = vi.spyOn(ctx.ui, "setStatus");
+      configRef.current = makeConfig({ placement: "border" });
+      engine["_tps"] = 42.5;
+
+      (renderer as any).render(ctx);
+
+      expect(setStatusSpy).toHaveBeenCalledWith(STATUS_KEY, expect.anything());
     });
   });
 });

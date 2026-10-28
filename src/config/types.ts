@@ -1,6 +1,7 @@
 import { type CountStrategy } from "../settings/items/count-strategy";
 import { type DisplayMode } from "../settings/items/display";
 import { type EndTpsBehavior } from "../settings/items/end-tps-behavior";
+import { type Placement } from "../settings/items/placement";
 
 /**
  * Status bar suffix parts that can be colorized.
@@ -49,6 +50,7 @@ interface TokenSpeedConfigFields {
   countStrategy: CountStrategy;
   endTpsBehavior: EndTpsBehavior;
   icon: string;
+  placement: Placement;
   updateInterval: number; // ms, 0 = update on every delta
   formatDuration: boolean;
   thresholds: Thresholds;
