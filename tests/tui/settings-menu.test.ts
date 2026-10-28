@@ -33,6 +33,7 @@ const settingsState = vi.hoisted(() => {
     countStrategy: "direct" as const,
     endTpsBehavior: "average" as const,
     icon: "⚡",
+    placement: "footer" as const,
     updateInterval: 0,
     formatDuration: false,
     thresholds: { slow: 10, medium: 30, fast: 60, blazing: 100 },
@@ -119,12 +120,32 @@ describe("SettingsMenu", () => {
 
       const ids = items.map((i: SettingItem) => i.id);
       expect(ids).toContain("display");
+      expect(ids).toContain("placement");
       expect(ids).toContain("icon");
       expect(ids).toContain("updateInterval");
       expect(ids).toContain("useProviderTokens");
       expect(ids).toContain("countStrategy");
       expect(ids).toContain("slidingWindow");
       expect(ids).toContain("endTpsBehavior");
+    });
+
+    it("shows the placement row with its current display label", () => {
+      const tui = makeTui();
+      const items = (menu as any).buildSettingsItems(
+        settings.getConfig(),
+        makeTheme(),
+        tui,
+      );
+
+      const placementItem = items.find(
+        (i: SettingItem) => i.id === "placement",
+      );
+      expect(placementItem).toBeDefined();
+      expect(placementItem?.currentValue).toBe("Footer status bar");
+      expect(placementItem?.values).toEqual([
+        "Footer status bar",
+        "Above input (border)",
+      ]);
     });
 
     it("includes thresholds group entry", () => {

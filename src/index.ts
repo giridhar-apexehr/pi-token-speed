@@ -9,13 +9,18 @@ import { CommandManager } from "./commands";
 import { createSettings } from "./config/settings";
 import { TokenSpeedEngine } from "./core/engine";
 import { EventManager } from "./core/events";
+import {
+  createTokenSpeedEditor,
+  EditorBorderStatus,
+} from "./ui/tps-editor";
 import { Renderer } from "./ui/renderer";
 
 export default async (pi: ExtensionAPI) => {
   const settings = createSettings();
   await settings.initialize();
   const engine = new TokenSpeedEngine(settings);
-  const renderer = new Renderer(engine, settings);
+  const borderStatus = new EditorBorderStatus();
+  const renderer = new Renderer(engine, settings, borderStatus);
   const commands = new CommandManager(renderer, engine, settings);
   const eventManager = new EventManager(engine, renderer, settings);
 
@@ -29,11 +34,14 @@ export default async (pi: ExtensionAPI) => {
 
   // Session lifecycle
   pi.on("session_start", async (_, ctx: ExtensionContext) => {
+    // Mount the editor first so the readout has a border to render into.
+    ctx.ui.setEditorComponent(createTokenSpeedEditor(borderStatus));
     await eventManager.handleSessionStart(ctx);
   });
 
   pi.on("session_shutdown", () => {
     eventManager.handleSessionShutdown();
+    borderStatus.clear();
   });
 
   // Streaming lifecycle

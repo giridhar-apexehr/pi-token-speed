@@ -7,7 +7,9 @@ import type {
 } from "../config/types";
 import { TokenSpeedEngine } from "../core/engine";
 import { type DisplayMode } from "../settings/items/display";
+import type { Placement } from "../settings/items/placement";
 import { truecolor } from "./ansi";
+import type { EditorBorderStatus } from "./tps-editor";
 
 /**
  * Options for rendering the stats suffix.
@@ -20,7 +22,11 @@ interface StatsFormatOptions {
 }
 
 /**
- * Renderer for the token-speed status bar.
+ * Renderer for the token-speed readout.
+ *
+ * The placement is configurable: Pi's footer status entry (default) or the
+ * right side of the message input's top border. The border placement falls
+ * back to the footer when no editor is mounted (e.g. RPC mode).
  */
 export class Renderer {
   private lastUpdateTime = 0;
@@ -31,10 +37,11 @@ export class Renderer {
   constructor(
     private readonly engine: TokenSpeedEngine,
     private readonly settings: SettingsProvider,
+    private readonly borderStatus: EditorBorderStatus,
   ) {}
 
   /**
-   * Updates the status bar, throttled by the configured updateInterval.
+   * Updates the readout, throttled by the configured updateInterval.
    * If updateInterval is undefined, updates happen immediately (current behavior).
    *
    * @param ctx The context used by Pi.
@@ -58,7 +65,20 @@ export class Renderer {
   }
 
   /**
-   * Renders the status bar update without throttling.
+   * Renders immediately, bypassing the update interval.
+   *
+   * Used when a setting that changes the readout itself is applied (e.g.
+   * placement, colors), so the new value shows up without waiting for the next
+   * token or interval tick.
+   *
+   * @param ctx The context used by Pi.
+   */
+  refresh(ctx: ExtensionContext): void {
+    this.render(ctx);
+  }
+
+  /**
+   * Renders the readout update without throttling.
    *
    * @param ctx The context used by Pi.
    */
@@ -83,6 +103,31 @@ export class Renderer {
     const prefix = theme.fg("dim", `${icon}TPS:`);
     const text = `${prefix} ${displayValue}${suffix}`;
 
+    this.paint(ctx, text, config.placement);
+  }
+
+  /**
+   * Writes the readout to the configured placement.
+   *
+   * Falls back to the footer status entry whenever the border placement is
+   * selected but no editor is mounted (e.g. RPC or print mode).
+   *
+   * @param ctx The context used by Pi.
+   * @param text The fully styled readout.
+   * @param placement Where the readout should be rendered.
+   */
+  private paint(
+    ctx: ExtensionContext,
+    text: string,
+    placement: Placement,
+  ): void {
+    if (placement === "border" && this.borderStatus.hasEditor()) {
+      this.borderStatus.set(text);
+      return;
+    }
+
+    // Keep the border clean while the footer is the active placement.
+    this.borderStatus.clearLabel();
     ctx.ui.setStatus(STATUS_KEY, text);
   }
 
@@ -206,7 +251,7 @@ export class Renderer {
   };
 
   /**
-   * Builds a suffix for the status bar after the TPS measurement.
+   * Builds a suffix for the readout after the TPS measurement.
    *
    * @param display Display mode to check against
    * @param opts Formatting options for the stats portion.
@@ -218,7 +263,7 @@ export class Renderer {
   }
 
   /**
-   * Renders the first-run placeholder in the status bar.
+   * Renders the first-run placeholder ("TPS: --").
    *
    * @param ctx The context used by Pi.
    */
@@ -228,7 +273,7 @@ export class Renderer {
     const icon = config.icon ? `${config.icon} ` : "";
     const prefix = theme.fg("dim", `${icon}TPS:`);
     const text = `${prefix} --`;
-    ctx.ui.setStatus(STATUS_KEY, text);
+    this.paint(ctx, text, config.placement);
   }
 
   /**

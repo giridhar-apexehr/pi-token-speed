@@ -1,6 +1,6 @@
 # pi-token-speed
 
-A [Pi Coding Agent](https://pi.dev/) extension that displays real-time **tokens-per-second (TPS)** performance metrics in the status bar while the AI is streaming responses.
+A [Pi Coding Agent](https://pi.dev/) extension that displays real-time **tokens-per-second (TPS)** performance metrics while the AI is streaming responses — in the footer status bar, or on the top border of the message input.
 
 ## Features
 
@@ -8,10 +8,33 @@ A [Pi Coding Agent](https://pi.dev/) extension that displays real-time **tokens-
 - **Time-to-first-token (TTFT)** — measures latency from user message to the first token being generated
 - **Configurable sliding window** — adjust the window size to suit your server speed (default: 1s)
 - **Color-coded speed indicators** — visual feedback based on performance thresholds
-- **Configurable update interval** — throttle status bar updates to reduce visual flickering
+- **Configurable update interval** — throttle readout updates to reduce visual flickering
 - **Provider-reported counting** — opt in to using provider-reported counts (e.g. Anthropic, OpenAI) instead of the extension's own counter
 - **Per-provider overrides** — different thresholds, display mode, etc. per provider (e.g. `anthropic` vs `openai`)
 - **Fully configurable** — customize display, thresholds and colors via `~/.pi/agent/settings.json`
+
+## Where it renders
+
+By default the readout is drawn in Pi's **footer status bar** (the classic
+behavior). Set `placement` to `border` to move it to the **top border of the
+message input**, flush to the right edge:
+
+```
+──────────────────────────── ⚡ TPS: 42.5 tok/s ─
+```
+
+Switch it interactively with **Placement** in the `/tps` menu, or directly:
+
+```json
+{
+  "tokenSpeed": {
+    "placement": "border"
+  }
+}
+```
+
+In non-interactive modes (RPC/print) there is no editor border, so the readout
+falls back to the footer status entry.
 
 ## Speed Tiers
 
@@ -134,11 +157,12 @@ Invalid configuration values are automatically corrected to their defaults. A wa
 | `colors.blazing`     | string                         | `"#44ddff"` | Color for blazing tier                                                                            |
 | `slidingWindow`      | number                         | `1000`      | Sliding window duration in ms                                                                     |
 | `display`            | `tps`, `ttft`, `stats`, `full` | `tps`       | Display mode (see [Display Modes](#display-modes))                                                |
+| `placement`          | `footer`, `border`             | `footer`    | Where to render the readout (see [Where it renders](#where-it-renders))                           |
 | `useProviderTokens`  | boolean                        | `false`     | Opt-in: use provider-reported count instead of the extension one                                  |
 | `countStrategy`      | `estimate`, `direct`           | `direct`    | Token counting strategy used by the extension's own counter                                       |
 | `endTpsBehavior`     | `average`, `last`              | `average`   | What to show after streaming ends                                                                 |
-| `icon`               | string                         | `"⚡"`      | Icon shown before TPS in the status bar                                                           |
-| `updateInterval`     | number                         | `0`         | Status bar update interval in ms (0 = every delta)                                                |
+| `icon`               | string                         | `"⚡"`      | Icon shown before TPS in the readout                                                              |
+| `updateInterval`     | number                         | `0`         | Readout update interval in ms (0 = every delta)                                                   |
 | `formatDuration`     | boolean                        | `false`     | Show elapsed time in human-readable units (see [Duration Formatting](#duration-formatting))       |
 | `displayColors`      | object                         | `{}`        | Hex colors for the suffix parts (see [Display Color Customization](#display-color-customization)) |
 | `providerOverrides`  | object                         | `{}`        | Per-provider config overrides (see [Provider Overrides](#provider-overrides))                     |
@@ -147,9 +171,10 @@ Invalid configuration values are automatically corrected to their defaults. A wa
 
 A small interactive menu is available when running `/tps` in the editor, where you can adjust:
 
-- **Display mode** — what to show in the status bar
+- **Display mode** — what to show in the readout
+- **Placement** — render in the footer status bar or on the input border
 - **Status icon** — choose the icon shown before TPS (`⚡`, `🔥`, `💨`, `🚀`, or none)
-- **Status update interval** — throttle status bar updates (see [Status Update Interval](#status-update-interval))
+- **Status update interval** — throttle readout updates (see [Status Update Interval](#status-update-interval))
 - **Use provider tokens** — use provider-reported counts instead of the extension's counter
 - **Count strategy** — how the extension counts tokens (`estimate` or `direct`)
 - **Sliding window** — time window for TPS calculation (see [Sliding Window](#sliding-window))
@@ -271,7 +296,7 @@ Alternatively, you can set display colors directly in `~/.pi/agent/settings.json
 }
 ```
 
-When set, the status bar suffix renders like:
+When set, the readout renders like:
 
 ```
 ⚡ TPS: 25.0 tok/s (150 tok in 6.0s · TTFT: 450 ms)
@@ -279,7 +304,7 @@ When set, the status bar suffix renders like:
 
 where "150 tok" is green, "6.0s" is orange, and "450 ms" is cyan.
 
-Display colors are independent from tier colors — they can be used together for a fully customized status bar.
+Display colors are independent from tier colors — they can be used together for a fully customized readout.
 
 ### Threshold Customization
 
@@ -302,7 +327,7 @@ Alternatively, you can set thresholds directly in `~/.pi/agent/settings.json`:
 
 ### Status Update Interval
 
-By default, the status bar updates on every token delta. If you're experiencing visual flickering, you can configure the update interval in milliseconds via the `/tps` interactive menu (`0`, `50`, `100`, `200`, `500`).
+By default, the readout updates on every token delta. If you're experiencing visual flickering, you can configure the update interval in milliseconds via the `/tps` interactive menu (`0`, `50`, `100`, `200`, `500`).
 
 You can also set a custom value in `~/.pi/agent/settings.json`:
 
@@ -314,7 +339,7 @@ You can also set a custom value in `~/.pi/agent/settings.json`:
 }
 ```
 
-The TPS calculation continues normally regardless of the update interval — only the status bar rendering is throttled.
+The TPS calculation continues normally regardless of the update interval — only the border rendering is throttled.
 
 ### Duration Formatting
 
@@ -348,9 +373,9 @@ When `formatDuration` is enabled, elapsed time in the stats display is formatted
 
 > **Note:** Set `icon: ""` to hide the icon prefix, rendering just `TPS: 25.0 tok/s`.
 
-### Example: Minimal status bar
+### Example: Minimal readout
 
-With `icon: ""` and `display: "tps"`, the status bar shows:
+With `icon: ""` and `display: "tps"`, the readout shows:
 
 ```
 TPS: 25.0 tok/s
@@ -384,7 +409,7 @@ The settings menu is described in detail in [Interactive Menu](#interactive-menu
 
 ## How It Works
 
-1. **Session Start** — Renders the initial status bar entry showing the configured icon followed by `TPS: --`
+1. **Session Start** — Renders the initial border readout showing the configured icon followed by `TPS: --`
 2. **Message Start** — When a user message starts, TTFT measurement begins
 3. **First Token & Streaming Start** — The moment the first content block starts (`text_start`, `thinking_start`, or `toolcall_start`), the TTFT is recorded and the streaming engine starts tracking
 4. **Token Update** — Each text, thinking, and tool-call delta is recorded. If `useProviderTokens` is `true` and the provider reports token counts, those are used directly; otherwise the extension's own counter (controlled by `countStrategy`) is used
